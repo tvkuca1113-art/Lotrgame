@@ -1,0 +1,5 @@
+# Generated artwork is binary and should not be diffed or line-ending converted.
+*.png binary
+*.zip binary
+public/assets/** linguist-generated=true
+package-lock.json linguist-generated=true

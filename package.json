@@ -1,0 +1,35 @@
+{
+  "name": "the-last-hearth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "THE LAST HEARTH: RINGS OF THE NORTH - an unofficial, non-canonical fan-made isometric action RPG for desktop and mobile browsers.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "assets": "node --experimental-strip-types tools/build-assets.ts",
+    "prebuild": "npm run assets",
+    "predev": "npm run assets",
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build:nocheck": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run typecheck && npm run test",
+    "package": "node --experimental-strip-types tools/package-zip.ts"
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.21",
+    "playwright": "^1.56.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "vitest": "3.2.7"
+  }
+}

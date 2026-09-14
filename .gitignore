@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-zip/
+.vite/
+*.local
+.DS_Store
+coverage/
+.env
+.env.*
+!.env.example
+qa-shots/
+tools/qa/tmp/

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#171C1B" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="The Last Hearth: Rings of the North - an unofficial fan-made isometric action RPG. A weak wanderer, meaningful rings, fair bosses, changing seasons, and a home that becomes a castle."
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>The Last Hearth: Rings of the North</title>
+    <link rel="icon" href="./assets/ui/favicon.png" type="image/png" />
+    <style>
+      :root {
+        --forest: #203b2d;
+        --charcoal: #171c1b;
+        --gold: #c2a264;
+        --parchment: #e4d8bc;
+        --ember: #ce7144;
+        --winter: #95b6c6;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--charcoal);
+        color: var(--parchment);
+        font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+      }
+      #game-root {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #game-root canvas {
+        display: block;
+        touch-action: none;
+      }
+      #boot-veil {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background:
+          radial-gradient(circle at 50% 38%, rgba(206, 113, 68, 0.18), transparent 62%),
+          linear-gradient(180deg, #1b2320 0%, #171c1b 58%, #101413 100%);
+        z-index: 40;
+        transition: opacity 420ms ease;
+        text-align: center;
+        padding: 24px;
+      }
+      #boot-veil.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot-veil h1 {
+        font-size: clamp(20px, 5vw, 34px);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin: 0;
+        color: var(--gold);
+        font-weight: 500;
+      }
+      #boot-veil p {
+        margin: 0;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+        color: #9fb0a4;
+        font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      }
+      #boot-bar {
+        width: min(340px, 74vw);
+        height: 6px;
+        border: 1px solid rgba(194, 162, 100, 0.5);
+        background: rgba(0, 0, 0, 0.45);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      #boot-bar > i {
+        display: block;
+        height: 100%;
+        width: 6%;
+        background: linear-gradient(90deg, #8c5a33, var(--ember), var(--gold));
+        transition: width 220ms ease;
+      }
+      #boot-error {
+        max-width: 620px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        color: #e08f6d;
+        white-space: pre-wrap;
+        text-align: left;
+        display: none;
+      }
+      .rotate-hint {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-root" aria-label="The Last Hearth game viewport" role="application"></div>
+    <div id="boot-veil">
+      <h1>The Last Hearth</h1>
+      <p>Rings of the North</p>
+      <div id="boot-bar"><i></i></div>
+      <p id="boot-status">Kindling the hearth&hellip;</p>
+      <pre id="boot-error"></pre>
+    </div>
+    <noscript>
+      <div style="padding: 32px; color: #e4d8bc">
+        The Last Hearth needs JavaScript enabled in order to run.
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

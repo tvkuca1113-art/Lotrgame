@@ -1,0 +1,74 @@
+THE LAST HEARTH: RINGS OF THE NORTH
+An unofficial, non-commercial fan project.
+
+================================================================================
+1. SOURCE CODE AND GENERATED ASSETS
+================================================================================
+
+The source code in this repository, the asset-generation pipeline in tools/,
+and every image produced by that pipeline into public/assets are released by
+their author under the MIT Licence:
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+All audio is synthesised at runtime from the code in src/audio and is covered
+by the same terms. No audio files are distributed.
+
+================================================================================
+2. THIRD-PARTY SOFTWARE
+================================================================================
+
+  Phaser 3.90.0   - MIT Licence   - https://phaser.io
+  Vite 7          - MIT Licence   - https://vite.dev
+  TypeScript 5    - Apache 2.0    - https://www.typescriptlang.org
+  Vitest 3        - MIT Licence   - https://vitest.dev
+  Playwright      - Apache 2.0    - https://playwright.dev  (verification only)
+
+Their licence texts ship inside node_modules and are not reproduced here.
+
+================================================================================
+3. INTELLECTUAL PROPERTY NOTICE
+================================================================================
+
+This is an unofficial, non-commercial fan project. The Lord of the Rings, The
+Hobbit, Middle-earth and their peoples, places and creatures were created by
+J.R.R. Tolkien. This project is not affiliated with, endorsed by, sponsored by,
+or connected to the Tolkien Estate, Middle-earth Enterprises, Embracer Group,
+Warner Bros., or any film, television or game rights holder.
+
+The MIT grant in section 1 covers only this project's own code, artwork, writing
+and audio. It does not and cannot grant any rights in the Middle-earth setting
+itself, and it is not a claim of ownership over any part of it.
+
+No film footage, film or game music, actor likenesses, trademarked logos, or
+assets extracted from any existing game or film have been used. Every image in
+this project is generated procedurally by tools/art; every line of dialogue and
+every description was written for this project.
+
+The Ashen Regent, the twelve lesser rings, the northern valley, its settlement
+and residents, and every named boss are original characters and inventions
+created for this side story. The rings in this game are small hearth-craft
+workings: they are not the One Ring, and they are not substitutes for or
+depictions of the canonical Great Rings.
+
+Franchise names and lore are confined to src/content so that the entire setting
+can be replaced. If you are a rights holder and would like something changed or
+removed, that directory is the only place you need to look.
