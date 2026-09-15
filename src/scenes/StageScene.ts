@@ -1123,7 +1123,12 @@ export class StageScene extends Phaser.Scene {
             amount: Math.round(h.damage * 0.4 * diff.incomingDamage), source: 'environment',
             fromX: h.x, fromY: h.y,
           });
-          if (dealt > 0) this.floaters.show(this.player.x, this.player.y, `-${dealt}`, '#E08B72', 14);
+          if (dealt > 0) {
+            // Counted like any other enemy damage: a boss whose whole kit is
+            // ground hazards still has to be seen to hurt the player.
+            this.bossDamageTaken += dealt;
+            this.floaters.show(this.player.x, this.player.y, `-${dealt}`, '#E08B72', 14);
+          }
         }
       }
       if (h.time <= 0) {
