@@ -51,6 +51,12 @@ export class UIScene extends Phaser.Scene {
   private stickKnob?: Phaser.GameObjects.Image;
   private touchButtons: { key: string; img: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }[] = [];
   private stickPointerId = -1;
+  /**
+   * Every listener this scene puts on the *stage* scene's emitter, so shutdown
+   * can take them all off again. That emitter outlives this scene: a listener
+   * left behind keeps handling events and draws into a scene that is gone.
+   */
+  private stageHandlers: [string, (...args: never[]) => void][] = [];
   private stickOrigin = { x: 0, y: 0 };
   private bossIntroGroup: Phaser.GameObjects.Container | null = null;
   private pauseButton!: Button;
@@ -66,37 +72,39 @@ export class UIScene extends Phaser.Scene {
     this.touchButtons = [];
     this.bossIntroGroup = null;
     this.stickPointerId = -1;
+    this.stageHandlers = [];
     this.stage = this.scene.get('Stage');
     this.touch = isTouchDevice();
     this.toaster = new Toaster(this);
     this.buildHud();
     if (this.touch) this.buildTouchControls();
 
-    this.stage.events.on('hud', this.onHud, this);
-    this.stage.events.on('objective', this.onObjective, this);
-    this.stage.events.on('escort', this.onEscort, this);
-    this.stage.events.on('toast', (msg: string, icon?: string, dur?: number) => this.toaster.show(msg, { icon, duration: dur }), this);
-    this.stage.events.on('tutorial', (key: string) => this.showTutorial(key), this);
-    this.stage.events.on('prompt', (text: string | null) => this.showPrompt(text), this);
-    this.stage.events.on('boss:intro', this.onBossIntro, this);
-    this.stage.events.on('boss:start', () => this.clearBossIntro(), this);
-    this.stage.events.on('boss:phase', (d: { index: number; introKey?: string }) => {
+    this.onStage('hud', this.onHud, this);
+    this.onStage('objective', this.onObjective, this);
+    this.onStage('escort', this.onEscort, this);
+    this.onStage('toast', (msg: string, icon?: string, dur?: number) => this.toaster.show(msg, { icon, duration: dur }), this);
+    this.onStage('tutorial', (key: string) => this.showTutorial(key), this);
+    this.onStage('prompt', (text: string | null) => this.showPrompt(text), this);
+    this.onStage('boss:intro', this.onBossIntro, this);
+    this.onStage('boss:start', () => this.clearBossIntro(), this);
+    this.onStage('boss:phase', (d: { index: number; introKey?: string }) => {
       if (d.introKey) this.toaster.show(t(d.introKey), { icon: 'skull', duration: 3600 });
     }, this);
-    this.stage.events.on('boss:defeated', (d: { defeatKey: string }) => {
+    this.onStage('boss:defeated', (d: { defeatKey: string }) => {
       this.toaster.show(t(d.defeatKey), { icon: 'star', duration: 5000 });
     }, this);
-    this.stage.events.on('xp', (amount: number) => this.onXp(amount), this);
-    this.stage.events.on('ring:found', () => this.refreshRings(), this);
-    this.stage.events.on('retry', () => { this.clearBossIntro(); this.toaster.clear(); }, this);
-    this.stage.events.on('stage:ready', (d: { objective: StageObjective; objectiveDone: number; objectiveTotal: number }) => {
+    this.onStage('xp', (amount: number) => this.onXp(amount), this);
+    this.onStage('ring:found', () => this.refreshRings(), this);
+    this.onStage('retry', () => { this.clearBossIntro(); this.toaster.clear(); }, this);
+    this.onStage('stage:ready', (d: { objective: StageObjective; objectiveDone: number; objectiveTotal: number }) => {
       this.onObjective({ done: d.objectiveDone, total: d.objectiveTotal, key: d.objective.labelKey });
     }, this);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
-      this.stage.events.off('hud', this.onHud, this);
+      for (const [event, fn] of this.stageHandlers) this.stage.events.off(event, fn, this);
+      this.stageHandlers = [];
     });
     // Everything in the HUD - including the touch stick's hit area, which is
     // built at a placeholder size - is positioned by layout(). Without this
@@ -104,6 +112,12 @@ export class UIScene extends Phaser.Scene {
     // means the stick sits in a ten-pixel corner and no touch ever finds it.
     this.layout();
     void data;
+  }
+
+  /** Subscribes to a stage event and remembers it so shutdown can undo it. */
+  private onStage(event: string, fn: (...args: never[]) => void, context?: unknown): void {
+    this.stageHandlers.push([event, fn]);
+    this.stage.events.on(event, fn, context ?? this);
   }
 
   private buildHud(): void {

@@ -312,7 +312,11 @@ export class Toaster {
   constructor(scene: Phaser.Scene) { this.scene = scene; }
 
   show(text: string, opts: { icon?: string; colour?: string; duration?: number } = {}): void {
-    const cam = this.scene.cameras.main;
+    // A toast can arrive from another scene's event after this one has shut
+    // down. Drawing into a stopped scene throws deep inside Phaser, so check
+    // the scene is still live rather than let it fail somewhere unrelated.
+    const cam = this.scene.sys?.isActive() ? this.scene.cameras.main : null;
+    if (!cam) return;
     const label = this.scene.add.text(0, 0, text, {
       fontFamily: FONT_BODY, fontSize: '15px', color: opts.colour ?? HEX.parchment,
       align: 'center', wordWrap: { width: 420 },

@@ -255,7 +255,17 @@ export class StageScene extends Phaser.Scene {
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.onHidden, this);
     this.game.events.on(Phaser.Core.Events.VISIBLE, this.onVisible, this);
 
-    if (this.defence) this.events.emit('toast', t('replay.defence_note'), 'shield', 5200);
+    // scene.launch() is queued, so the HUD scene has not run its create() yet
+    // and is not listening. Intro messages go out on the next tick, by which
+    // time it is; emitting them here would simply lose them.
+    const intro: [string, string][] = [];
+    if (this.defence) intro.push([t('replay.defence_note'), 'shield']);
+    if (this.cart) intro.push([t('escort.start'), 'move']);
+    if (intro.length) {
+      this.time.delayedCall(60, () => {
+        for (const [msg, icon] of intro) this.events.emit('toast', msg, icon, 5200);
+      });
+    }
     if (this.fixture) this.applyFixture();
     else if (this.challenge && this.challenge.kind !== 'hard') this.openAtBoss();
     if (this.challenge?.run) this.applyGauntletCarry(this.challenge.run);
@@ -314,7 +324,6 @@ export class StageScene extends Phaser.Scene {
       this.map.entrance.x * TILE + TILE, this.map.entrance.y * TILE,
       420 + this.stageId * 26,
     );
-    this.events.emit('toast', t('escort.start'), 'move', 5200);
   }
 
   /**
