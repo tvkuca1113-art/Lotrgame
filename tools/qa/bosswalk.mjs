@@ -3,6 +3,18 @@
  * trigger the fight, drive it through all of its phases and confirm the arena,
  * telegraphs, phase transitions and defeat path all work. Reports console
  * errors and missing assets per stage.
+ *
+ * The player is not made invulnerable here. A pass requires the boss to have
+ * actually landed a hit, so the run proves the damage path works rather than
+ * only that the arena loads.
+ *
+ * Note on driving the fight from the harness: this loop acts once per rendered
+ * frame, but the game simulates on a fixed step and a single frame can be worth
+ * up to 250 ms of game time. Anything expressed per frame - damage, timeouts,
+ * counters - therefore scales with the frame rate, not with game time. Keep the
+ * per-frame damage above the rounding threshold: a chunk below 0.5 rounds to
+ * zero and the boss becomes unkillable by the test while remaining perfectly
+ * killable in the game.
  */
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
@@ -99,11 +111,17 @@ for (const stage of only) {
       };
       s.boss.onPhaseChange = (p, i) => info.phasesEntered.push(`${i}:${p.id}`);
 
-      // Stand in melee range so the boss actually commits to its attacks. The
-      // kill is deliberately slow (about 900 frames of chip damage) so every
-      // boss gets through several attack cycles before it dies.
-      const chunk = s.boss.maxHealth / 900;
-      for (let i = 0; i < 3000; i++) {
+      // Stand in melee range so the boss actually commits to its attacks, and
+      // chip it down over roughly 400 frames so it gets through several attack
+      // cycles first.
+      //
+      // Two things this has to respect. Damage is rounded, so a chunk below
+      // 0.5 rounds to nothing and the boss can never die - at 1/900 of health
+      // that is exactly what happened to the 320 hp opener. And a frame is
+      // worth up to 250 ms of simulated time under the fixed step, so a large
+      // frame budget is a very long fight in game terms, not a safety margin.
+      const chunk = Math.max(2, s.boss.maxHealth / 400);
+      for (let i = 0; i < 1200; i++) {
         await frame();
         if (!s.boss) break;
         // The player is NOT made invulnerable: boss attacks must actually
