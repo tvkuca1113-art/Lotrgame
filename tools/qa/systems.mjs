@@ -99,6 +99,43 @@ await step('a full stage can be finished and pays out once', async () => {
   return `first clear ${res.afterFirst} gold, replay +${res.afterSecond - res.afterFirst} (${(replayShare * 100).toFixed(0)}%)`;
 });
 
+await step('stages can be entered, left and re-entered without breaking', async () => {
+  // Phaser reuses scene instances and its emitters outlive the scenes that
+  // subscribe to them, so the interesting failures only appear on the second
+  // and third visit - never in a single playthrough of a single mission.
+  const before = errors.length;
+  const visits = [];
+  for (const stage of [4, 12, 4]) {
+    await enterStage({ stage });
+    visits.push(await page.evaluate(() => {
+      const s = window.__hearth.scene('Stage');
+      const ui = window.__hearth.scene('UI');
+      return {
+        stage: s.stageId,
+        ready: s.ready === true,
+        player: !!s.player && s.player.alive,
+        enemies: s.enemies.length,
+        hudLive: !!ui && ui.sys.isActive(),
+      };
+    }));
+    // Back to the settlement between missions, as a player would.
+    await page.evaluate(() => {
+      const g = window.__hearth.game;
+      g.scene.stop('Stage'); g.scene.stop('UI');
+      g.scene.start('Home', {});
+    });
+    await page.waitForFunction(() => window.__hearth.scene('Home')?.ready === true, undefined, { timeout: 45000, polling: 150 });
+  }
+  const newErrors = errors.length - before;
+  for (const v of visits) {
+    if (!v.ready) throw new Error(`stage ${v.stage} never became ready`);
+    if (!v.player) throw new Error(`stage ${v.stage} had no live player`);
+    if (!v.hudLive) throw new Error(`the HUD was not running on stage ${v.stage}`);
+  }
+  if (newErrors > 0) throw new Error(`${newErrors} page error(s) while moving between stages`);
+  return visits.map((v, i) => `visit ${i + 1}: stage ${v.stage}, ${v.enemies} enemies, HUD live`).join('\n      ');
+});
+
 await step('the settlement loads and can be walked', async () => {
   await page.evaluate(() => {
     const g = window.__hearth.game;
