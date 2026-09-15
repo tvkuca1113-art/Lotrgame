@@ -49,6 +49,21 @@ const step = async (name, fn) => {
   try { const extra = await fn(); log.push(`PASS  ${name}${extra ? `\n      ${extra}` : ''}`); }
   catch (e) { log.push(`FAIL  ${name}: ${e.message.split('\n')[0]}`); }
 };
+/** Starts a fresh Stage scene and waits until it is playable. */
+const enterStage = async (data) => {
+  await page.evaluate((d) => {
+    const g = window.__hearth.game;
+    for (const k of ['Stage', 'UI', 'Menu', 'Result', 'Home', 'Map', 'Challenge', 'Ending']) g.scene.stop(k);
+    g.scene.start('Stage', d);
+  }, data);
+  // The stage scene sets `ready` only once its async create() has finished
+  // building the world; Phaser reports RUNNING well before that.
+  await page.waitForFunction(
+    () => { const s = window.__hearth.scene('Stage'); return !!s && s.ready === true; },
+    undefined, { timeout: 60000, polling: 150 },
+  );
+};
+
 const shot = async (name) => {
   try {
     const data = await page.evaluate(() => window.__hearth.snapshot());
@@ -91,13 +106,20 @@ await step('the settlement loads and can be walked', async () => {
   await page.waitForFunction(() => !!window.__hearth?.scene('Home')?.player, undefined, { timeout: 30000, polling: 150 });
   const moved = await page.evaluate(async () => {
     const h = window.__hearth.scene('Home');
-    const before = { x: h.player.x, y: h.player.y };
-    h.input2.setTouchMove(1, 0, 1);
-    await new Promise((r) => setTimeout(r, 900));
-    h.input2.setTouchMove(0, 0, 0);
-    return Math.hypot(h.player.x - before.x, h.player.y - before.y);
+    // A structure may stand in any one direction, so walking counts if the
+    // player can move at all - try each of the four in turn.
+    let best = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const before = { x: h.player.x, y: h.player.y };
+      h.input2.setTouchMove(dx, dy, 1);
+      await new Promise((r) => setTimeout(r, 700));
+      h.input2.setTouchMove(0, 0, 0);
+      best = Math.max(best, Math.hypot(h.player.x - before.x, h.player.y - before.y));
+      if (best >= 40) break;
+    }
+    return best;
   });
-  if (moved < 20) throw new Error(`player did not move in the settlement (${moved.toFixed(0)}px)`);
+  if (moved < 20) throw new Error(`player did not move in the settlement (${moved.toFixed(0)}px in any direction)`);
   return `walked ${moved.toFixed(0)} world px`;
 });
 await shot(`${mobile ? 'mobile' : 'desktop'}-home.png`);
@@ -135,8 +157,6 @@ await step('a building can be placed, moved and dismantled for a full refund', a
     const moveCost = goldBeforeMove - st.resources.gold;
     // Dismantle - full refund.
     h.interact = { kind: 'decor', x: 0, y: 0, id: uid };
-    const { removeBuilding } = await import('/assets/systems-building.js').catch(() => ({}));
-    void removeBuilding;
     h.history.push({ kind: 'remove', uid, before: { ...st.home.buildings[0] } });
     window.__hearth.game.scene.getScene('Home');
     // Use the scene's own key handler path.
@@ -175,14 +195,26 @@ await step('both settlement ring sockets accept and release a ring', async () =>
     const st = window.__hearth.getState();
     const g = window.__hearth.game;
     g.scene.stop('Menu');
-    // Exercise the socket rules through the real system.
-    const { installRing, equipRing, ringLocation } = await import('./assets/index.js').catch(() => ({}));
-    void installRing; void equipRing; void ringLocation;
-    const h = window.__hearth.scene('Home');
-    void h;
-    return { a: st.ringSlots.active1, s0: st.ringSockets[0], s1: st.ringSockets[1] };
+    // Exercise the socket rules through the shipped system, not a copy of them.
+    const { installRing, equipRing, ringLocation } = window.__hearth.systems.rings;
+    st.rings.ember = st.rings.ember ?? { rank: 1, discovered: true, shards: 0 };
+    st.rings.ember.discovered = true;
+    equipRing(st, 'active1', 'ember');
+    const worn = ringLocation(st, 'ember');
+    const installed = installRing(st, 0, 'ember');
+    const after = ringLocation(st, 'ember');
+    return {
+      a: st.ringSlots.active1, s0: st.ringSockets[0], s1: st.ringSockets[1],
+      worn: worn ? `${worn.kind}:${worn.slot ?? worn.index}` : 'nowhere',
+      after: after ? `${after.kind}:${after.slot ?? after.index}` : 'nowhere',
+      installed: !!(installed && installed.ok !== false),
+    };
   });
-  return `active1=${sockets.a} socket0=${sockets.s0} socket1=${sockets.s1}`;
+  if (sockets.worn !== 'slot:active1') throw new Error(`equipRing put the ring in ${sockets.worn}`);
+  if (!sockets.installed) throw new Error('installRing refused a discovered ring');
+  if (sockets.a === 'ember') throw new Error('the ring is worn and socketed at once - exclusivity broken');
+  if (sockets.s0 !== 'ember') throw new Error('the ring is not in the socket');
+  return `equipped -> ${sockets.worn}, then socketed -> ${sockets.after} (active1 now ${sockets.a}), socket0=${sockets.s0} socket1=${sockets.s1}`;
 });
 
 await step('resting advances a day and the season turns after four', async () => {
@@ -230,6 +262,7 @@ await step('a seasonal route opens only in its own season', async () => {
 });
 
 await step('death and retry keeps loot and does not duplicate rewards', async () => {
+  await enterStage({ stage: 26, fixture: { stage: 26, atBoss: false } });
   const res = await page.evaluate(async () => {
     const s = window.__hearth.scene('Stage');
     const st = window.__hearth.getState();
@@ -262,18 +295,31 @@ await step('death and retry keeps loot and does not duplicate rewards', async ()
 await step('a full inventory sends rewards to the stash instead of losing them', async () => {
   const res = await page.evaluate(async () => {
     const st = window.__hearth.getState();
+    const { addItem, isFull, reclaimStash } = window.__hearth.systems.inventory;
     st.inventory.capacity = 1;
-    st.inventory.items = [{ uid: 'a', defId: 'sword_valley', locked: false }];
+    st.inventory.items = [];
     st.inventory.stash = [];
-    // Drive the real inventory path.
-    const g = window.__hearth.game;
-    void g;
+    addItem(st, 'sword_valley');
+    const full = isFull(st);
     const before = st.inventory.stash.length;
-    st.inventory.stash.push({ uid: 'b', defId: 'bow_hunting', locked: false });
-    return { before, after: st.inventory.stash.length, items: st.inventory.items.length };
+    // The second item has nowhere to go: it must be held, never dropped.
+    addItem(st, 'bow_hunting');
+    const stashed = st.inventory.stash.length;
+    // Making room and reclaiming must bring it back.
+    st.inventory.capacity = 4;
+    reclaimStash(st);
+    return {
+      full, before, stashed, items: st.inventory.items.length,
+      stashAfterReclaim: st.inventory.stash.length,
+      ids: st.inventory.items.map((i) => i.defId),
+    };
   });
-  if (res.after <= res.before) throw new Error('nothing reached the stash');
-  return `inventory ${res.items}/1 full, ${res.after} item(s) held in the overflow stash`;
+  if (!res.full) throw new Error('a one-slot inventory with one item did not report full');
+  if (res.stashed <= res.before) throw new Error('the second item was lost instead of stashed');
+  if (res.stashAfterReclaim !== 0 || res.items !== 2) {
+    throw new Error(`reclaim left ${res.items} item(s) and ${res.stashAfterReclaim} in the stash`);
+  }
+  return `overflow held 1 item in the stash, then reclaimed into the bag (${res.ids.join(', ')})`;
 });
 
 await step('the ending scene offers both choices and each writes an epilogue', async () => {
@@ -358,28 +404,21 @@ await step('the stronghold card renders from the save', async () => {
 });
 
 await step('a boss challenge pays out without touching campaign progress', async () => {
-  const res = await page.evaluate(async () => {
+  await page.evaluate(() => {
     const st = window.__hearth.getState();
     st.resources.gold = 0;
     st.player.xp = 0;
-    const clearedBefore = st.campaign.cleared.length;
+  });
+  await enterStage({ stage: 4, challenge: { id: 'boss:4', kind: 'boss' } });
+  const res = await page.evaluate(async () => {
+    const st = window.__hearth.getState();
     const dayBefore = st.calendar.day;
-    const g = window.__hearth.game;
-    g.scene.stop('Challenge');
-    g.scene.start('Stage', { stage: 4, challenge: { id: 'boss:4', kind: 'boss' } });
-    await new Promise((r) => setTimeout(r, 2500));
     const s = window.__hearth.scene('Stage');
     if (!s || !s.player) return { error: 'stage did not start' };
+    // A challenge run opens at the arena door with the approach already clear.
     const atDoor = !!s.exitArmed;
-    // Kill the boss the same way the fight would.
-    for (let i = 0; i < 2000 && !s.boss; i++) await new Promise((r) => requestAnimationFrame(r));
-    if (!s.boss) {
-      // The challenge opens at the door: step in.
-      const door = s.nodes.find((n) => n.kind === 'bossdoor');
-      if (door) { s.player.x = door.x; s.player.y = door.y; }
-      for (let i = 0; i < 900 && !s.boss; i++) await new Promise((r) => requestAnimationFrame(r));
-    }
-    if (!s.boss) return { error: 'boss never spawned' };
+    for (let i = 0; i < 1200 && !s.boss; i++) await new Promise((r) => requestAnimationFrame(r));
+    if (!s.boss) return { error: `boss never spawned (exitArmed=${s.exitArmed}, objective ${s.objectiveDone}/${s.objectiveTotal})` };
     for (let i = 0; i < 2500 && s.boss; i++) {
       await new Promise((r) => requestAnimationFrame(r));
       s.player.health = s.player.maxHealth;
@@ -388,7 +427,7 @@ await step('a boss challenge pays out without touching campaign progress', async
     await new Promise((r) => setTimeout(r, 2200));
     const st2 = window.__hearth.getState();
     return {
-      atDoor, gold: st2.resources.gold, xp: st2.player.xp,
+      atDoor, gold: st2.resources.gold, xp: st2.player.xp, dayBefore,
       clearedAfter: st2.campaign.cleared.length, dayAfter: st2.calendar.day,
       recorded: st2.replay.challengeCleared.includes('boss:4'),
       best: st2.campaign.bestTimes.boss4 ?? null,
@@ -400,19 +439,16 @@ await step('a boss challenge pays out without touching campaign progress', async
   if (!res.gold) throw new Error('challenge paid nothing');
   if (res.xp !== 0) throw new Error(`challenge granted ${res.xp} xp - challenges must not level the player`);
   if (res.clearedAfter !== 30) throw new Error('campaign progress changed');
-  if (res.dayAfter !== res.dayBefore && res.dayAfter !== undefined) { /* day is not advanced by challenges */ }
+  if (res.dayAfter !== res.dayBefore) throw new Error('a challenge advanced the calendar');
   return `opened at the boss door=${res.atDoor}, +${res.gold} gold, best=${res.best}ms, scenes=${res.scene}`;
 });
 
 await step('the settlement defence runs its waves and never risks the settlement', async () => {
+  await enterStage({ stage: 30, defence: true });
   const res = await page.evaluate(async () => {
     const st = window.__hearth.getState();
     const buildingsBefore = st.home.buildings.length;
     const goldBefore = st.resources.gold;
-    const g = window.__hearth.game;
-    for (const k of ['Stage', 'UI', 'Result', 'Challenge']) g.scene.stop(k);
-    g.scene.start('Stage', { stage: 30, defence: true });
-    await new Promise((r) => setTimeout(r, 3000));
     const s = window.__hearth.scene('Stage');
     if (!s || !s.player) return { error: 'defence did not start' };
     if (!s.defence) return { error: 'defence state missing' };
@@ -446,11 +482,8 @@ await step('the settlement defence runs its waves and never risks the settlement
 await shot(`${mobile ? 'mobile' : 'desktop'}-defence.png`);
 
 await step('the escort cart rolls with the player and survives being broken', async () => {
+  await enterStage({ stage: 16 });
   const res = await page.evaluate(async () => {
-    const g = window.__hearth.game;
-    for (const k of ['Stage', 'UI', 'Result']) g.scene.stop(k);
-    g.scene.start('Stage', { stage: 16 });
-    await new Promise((r) => setTimeout(r, 3000));
     const s = window.__hearth.scene('Stage');
     if (!s || !s.player) return { error: 'stage 16 did not start' };
     if (!s.cart) return { error: 'no cart on the escort stage' };

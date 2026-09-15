@@ -12,6 +12,13 @@ import { ChallengeScene } from './scenes/ChallengeScene';
 import { audio } from './audio/engine';
 import { getState } from './systems/state';
 import { saveGame } from './systems/save';
+import * as rings from './systems/rings';
+import * as building from './systems/building';
+import * as campaign from './systems/campaign';
+import * as replay from './systems/replay';
+import * as economy from './systems/economy';
+import * as escort from './systems/escort';
+import * as inventory from './systems/inventory';
 
 /**
  * THE LAST HEARTH: RINGS OF THE NORTH
@@ -102,6 +109,11 @@ if (import.meta.env.DEV || qaRequested) {
     saveGame,
     scene: (key: string) => game.scene.getScene(key),
     activeScenes: () => game.scene.getScenes(true).map((s) => s.scene.key),
+    /**
+     * The systems the verification scripts drive directly, so a check exercises
+     * the shipped implementation rather than a copy of its rules.
+     */
+    systems: { rings, building, campaign, replay, economy, escort, inventory },
     /** Capture the rendered frame; WebGL canvases cannot be read with toDataURL. */
     snapshot: () => new Promise<string>((resolve) => {
       game.renderer.snapshot((image) => {

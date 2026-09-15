@@ -47,6 +47,15 @@ export class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
 
   create(data: { tab?: Tab; from?: string; stage?: number }): void {
+    // Phaser reuses the scene instance across restarts, so every per-run
+    // collection is cleared here rather than at its field declaration -
+    // otherwise a second visit would keep the previous run's destroyed
+    // objects and lay new ones on top of them.
+    this.content = [];
+    this.tabButtons = [];
+    this.list = null;
+    this.selectedRing = null;
+    this.selectedItem = null;
     this.tab = data.tab ?? 'pause';
     this.from = data.from ?? 'Home';
     this.stage = data.stage ?? 1;
@@ -56,9 +65,12 @@ export class MenuScene extends Phaser.Scene {
     this.buildTabs();
     this.render();
     this.input.keyboard?.on('keydown-ESC', () => this.close());
-    this.scale.on(Phaser.Scale.Events.RESIZE, () => this.render(), this);
+    // Registered as a bound method, not an arrow: `off` needs the same
+    // reference, and calling `off` without one would remove the resize
+    // listeners belonging to the scene underneath this overlay too.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.render, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.scale.off(Phaser.Scale.Events.RESIZE);
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.render, this);
     });
     play('ui_open');
   }

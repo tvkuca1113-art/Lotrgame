@@ -58,6 +58,14 @@ export class UIScene extends Phaser.Scene {
   constructor() { super('UI'); }
 
   create(data: { stage: number }): void {
+    // Phaser reuses the scene instance across restarts, so every per-run
+    // collection is cleared here rather than at its field declaration -
+    // otherwise a second visit would keep the previous run's destroyed
+    // objects and lay new ones on top of them.
+    this.ringIcons = [];
+    this.touchButtons = [];
+    this.bossIntroGroup = null;
+    this.stickPointerId = -1;
     this.stage = this.scene.get('Stage');
     this.touch = isTouchDevice();
     this.toaster = new Toaster(this);

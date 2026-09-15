@@ -38,6 +38,8 @@ export class HomeScene extends Phaser.Scene {
   private weather!: WeatherLayer;
   private input2!: InputManager;
   private stepper = new FixedStep(60);
+  /** See create(): guards update() while the scene is still being built. */
+  private ready = false;
   private player!: Player;
   private map!: HomeMap;
   private season: Season = 'spring';
@@ -57,6 +59,19 @@ export class HomeScene extends Phaser.Scene {
   constructor() { super('Home'); }
 
   async create(): Promise<void> {
+    // create() is async and Phaser marks the scene RUNNING before it finishes,
+    // so update() must not run until the settlement is actually built.
+    this.ready = false;
+    // Phaser reuses the scene instance across restarts, so every per-run
+    // collection is cleared here rather than at its field declaration -
+    // otherwise a second visit would keep the previous run's destroyed
+    // objects and lay new ones on top of them.
+    this.buildingSprites.clear();
+    this.residentSprites = [];
+    this.buttons = [];
+    this.ghost = null;
+    this.build = { active: false, id: null, rotation: 0, movingUid: null };
+    this.history = new BuildHistory();
     const state = getState();
     this.season = state.calendar.season;
     if (state.home.tier < 0) state.home.tier = 0;
@@ -95,6 +110,7 @@ export class HomeScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
     this.events.on(Phaser.Scenes.Events.WAKE, () => this.onWake());
     this.events.on(Phaser.Scenes.Events.RESUME, () => this.onWake());
+    this.ready = true;
     void saveGame(state);
   }
 
@@ -548,7 +564,7 @@ export class HomeScene extends Phaser.Scene {
   // ------------------------------------------------------------- update
 
   override update(_time: number, delta: number): void {
-    if (!this.player) return;
+    if (!this.ready) return;
     if (phase.isPaused) return;
     this.input2.update();
     const steps = this.stepper.advance(delta);
@@ -612,6 +628,7 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
+    this.ready = false;
     this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.input2?.destroy();
     this.effects?.destroy();

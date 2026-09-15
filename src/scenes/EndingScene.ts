@@ -19,6 +19,10 @@ export class EndingScene extends Phaser.Scene {
   constructor() { super('Ending'); }
 
   create(): void {
+    // Phaser reuses the scene instance, so per-run state must reset here and
+    // not at the field declaration - otherwise a second playthrough in the same
+    // session would find the choice already made and ignore it.
+    this.chosen = null;
     phase.set('ENDING');
     const cam = this.cameras.main;
     this.cameras.main.setBackgroundColor(PALETTE.charcoal);

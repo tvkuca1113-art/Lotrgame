@@ -37,6 +37,15 @@ export class ChallengeScene extends Phaser.Scene {
   constructor() { super('Challenge'); }
 
   create(data: { tab?: Tab } = {}): void {
+    // Phaser reuses the scene instance across restarts, so every per-run
+    // collection is cleared here rather than at its field declaration -
+    // otherwise a second visit would keep the previous run's destroyed
+    // objects and lay new ones on top of them.
+    this.content = [];
+    this.buttons = [];
+    this.tabButtons = [];
+    this.list = null;
+    this.cardImage = null;
     phase.set('HOME');
     this.tab = data.tab ?? 'board';
     this.cameras.main.setBackgroundColor(PALETTE.charcoal);
@@ -61,8 +70,8 @@ export class ChallengeScene extends Phaser.Scene {
 
   private buildTabs(): void {
     const tabs: { id: Tab; label: string; icon: string }[] = [
-      { id: 'board', label: t('replay.board'), icon: 'skull' },
-      { id: 'hard', label: t('replay.hard'), icon: 'sword' },
+      { id: 'board', label: t('replay.tab_board'), icon: 'skull' },
+      { id: 'hard', label: t('replay.tab_hard'), icon: 'sword' },
       { id: 'gauntlet', label: t('replay.gauntlet'), icon: 'guardian' },
       { id: 'collection', label: t('replay.collection'), icon: 'ring' },
       { id: 'stronghold', label: t('replay.stronghold'), icon: 'home' },

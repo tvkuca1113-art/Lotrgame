@@ -253,6 +253,9 @@ export const EN_UI: Record<string, string> = {
 
   'replay.title': 'Challenges',
   'replay.board': 'Boss challenge board',
+  'replay.tab_board': 'Bosses',
+  'replay.tab_hard': 'Hardened',
+  'replay.structures': 'Structures',
   'replay.hard': 'Hardened replay',
   'replay.gauntlet': 'The Six',
   'replay.gauntlet_note': 'All six chapter bosses, with a checkpoint between each.',

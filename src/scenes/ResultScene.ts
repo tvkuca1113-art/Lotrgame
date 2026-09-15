@@ -20,6 +20,7 @@ export class ResultScene extends Phaser.Scene {
     stage: number; result: CompletionResult; explore: ResourceBundle;
     elapsedMs: number; bossDefeated: boolean;
     challenge?: { id: string; kind: 'boss' | 'hard' | 'gauntlet' };
+    defence?: { survived: boolean; waves: number; total: number };
   }): void {
     phase.set('STAGE_COMPLETE');
     const state = getState();
@@ -33,8 +34,15 @@ export class ResultScene extends Phaser.Scene {
     const panel = new Panel(this, (cam.width - w) / 2, 70, w, Math.min(cam.height - 180, 460), 'parchment');
     const lines: { text: string; colour: string; size?: number }[] = [];
     const ch = data.challenge;
-    lines.push({ text: t('hud.stage_clear'), colour: HEX.gold, size: 26 });
-    if (ch) {
+    const df = data.defence;
+    lines.push({
+      text: df ? t(df.survived ? 'replay.defence_survived' : 'replay.defence_lost') : t('hud.stage_clear'),
+      colour: df && !df.survived ? HEX.winter : HEX.gold,
+      size: 26,
+    });
+    if (df) {
+      lines.push({ text: `${t('replay.defence')} — ${t('replay.defence_wave', df.waves, df.total)}`, colour: HEX.parchment, size: 17 });
+    } else if (ch) {
       const label = ch.kind === 'gauntlet' ? t('replay.gauntlet') : ch.kind === 'hard' ? t('replay.hard') : t('replay.board');
       lines.push({ text: `${label} — ${t(def.nameKey)}`, colour: HEX.winter, size: 17 });
     } else {
@@ -43,7 +51,7 @@ export class ResultScene extends Phaser.Scene {
     lines.push({ text: `${t('common.time')}: ${formatTime(data.elapsedMs)}`, colour: HEX.muted });
     const bestKey = ch ? (ch.kind === 'hard' ? `hard${data.stage}` : `boss${data.stage}`) : `stage${data.stage}`;
     const recorded = ch?.kind === 'gauntlet' ? state.replay.gauntletBest : state.campaign.bestTimes[bestKey];
-    if (recorded !== undefined && recorded !== null) {
+    if (!df && recorded !== undefined && recorded !== null) {
       lines.push({ text: `${t('replay.best')}: ${formatTime(recorded)}`, colour: recorded >= data.elapsedMs ? HEX.gold : HEX.muted });
     }
 
@@ -71,12 +79,12 @@ export class ResultScene extends Phaser.Scene {
       if (r) lines.push({ text: `${t(r.nameKey)} — ${t(r.roleKey)}`, colour: HEX.good });
     }
     if (data.result.monumentUnlocked) lines.push({ text: t('build.monument.desc'), colour: HEX.gold });
-    if (!ch) {
+    if (!ch && !df) {
       if (data.result.seasonChanged) lines.push({ text: t('season.changed'), colour: HEX.winter });
       else lines.push({ text: t('season.advance'), colour: HEX.muted });
       const lp = levelProgress(state);
       lines.push({ text: `${t('hud.xp')} ${lp.current} / ${lp.needed}`, colour: HEX.muted });
-    } else if (ch.kind === 'gauntlet') {
+    } else if (ch?.kind === 'gauntlet') {
       lines.push({ text: t('replay.gauntlet_done'), colour: HEX.good });
     }
 
@@ -93,14 +101,15 @@ export class ResultScene extends Phaser.Scene {
     }
     panel.resize(w, Math.min(cam.height - 160, y + 24));
 
-    const finished = !ch && campaignComplete(state) && data.stage === 30 && !state.campaign.endingChosen;
+    const finished = !ch && !df && campaignComplete(state) && data.stage === 30 && !state.campaign.endingChosen;
     const exit = (): void => {
       if (finished) this.scene.start('Ending', {});
+      else if (df) this.scene.start('Challenge', { tab: 'gauntlet' });
       else if (ch) this.scene.start('Challenge', { tab: ch.kind === 'gauntlet' ? 'gauntlet' : ch.kind === 'hard' ? 'hard' : 'board' });
       else this.scene.start('Home', {});
     };
     const btn = new Button(this, cam.width / 2, Math.min(cam.height - 54, 70 + y + 58),
-      finished ? t('story.ending.choice') : ch ? t('replay.title') : t('home.title'),
+      finished ? t('story.ending.choice') : (ch || df) ? t('replay.title') : t('home.title'),
       () => { play('ui_confirm'); exit(); }, { width: 240 });
     void btn;
     this.input.keyboard?.once('keydown-ENTER', exit);

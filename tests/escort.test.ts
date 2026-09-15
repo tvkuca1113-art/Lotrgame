@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { TILE } from '@/systems/iso';
 import {
   newCartState, stepCart, damageCart, patchCart, resetCart,
-  ESCORT_LEASH, ESCORT_REPAIR_SECONDS, ESCORT_REPAIR_FRACTION,
+  ESCORT_LEASH, ESCORT_REPAIR_SECONDS, ESCORT_REPAIR_FRACTION, type Blocked,
 } from '@/systems/escort';
 
-const open = () => false;
+const open: Blocked = () => false;
 const DT = 1 / 60;
 
 /** Runs the cart for a number of fixed steps with the player alongside it. */
-function escortFor(c: ReturnType<typeof newCartState>, stop: { x: number; y: number }, steps: number, blocked = open) {
+function escortFor(c: ReturnType<typeof newCartState>, stop: { x: number; y: number }, steps: number, blocked: Blocked = open) {
   let arrived = false;
   let repaired = false;
   for (let i = 0; i < steps; i++) {
@@ -57,7 +57,7 @@ describe('the escort cart', () => {
 
   it('gives up on one way round and tries the other', () => {
     const c = newCartState(0, 0, 500);
-    const blocked = () => true;
+    const blocked: Blocked = () => true;
     const first = c.skirt;
     for (let i = 0; i < 60 * 13; i++) stepCart(c, DT, { x: 600, y: 0 }, { x: 10, y: 10 }, blocked);
     expect(c.skirt).toBe(first === 1 ? -1 : 1);

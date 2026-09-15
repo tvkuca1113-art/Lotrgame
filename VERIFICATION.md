@@ -7,7 +7,7 @@ measurement of real-world performance, it says so.
 - **Browser:** Chromium 1194 (Playwright), headed, **software rendering
   (SwiftShader)** — this container has no GPU
 - **Host:** Linux 6.18 container, 4 vCPU, 15 GB RAM
-- **Date:** 2026-09-14
+- **Date:** 2026-09-15
 
 Re-run any of it with:
 
@@ -15,8 +15,10 @@ Re-run any of it with:
 npm run verify                     # typecheck + unit and integration tests
 node tools/qa/smoke.mjs            # boot, first minutes, save/reload, pause
 node tools/qa/smoke.mjs --mobile   # the same on an emulated Pixel 5 with touch
-node tools/qa/systems.mjs          # settlement, seasons, retry, endings
+node tools/qa/systems.mjs          # settlement, seasons, retry, challenges,
+                                   # the defence, the escort cart, endings
 node tools/qa/bosswalk.mjs         # all 30 boss arenas
+node tools/qa/bosswalk.mjs 3,17    # or just the stages you name
 ```
 
 ---
@@ -28,7 +30,7 @@ node tools/qa/bosswalk.mjs         # all 30 boss arenas
 | `tsc --noEmit` (game + tests) | **clean, 0 errors** |
 | `tsc --noEmit -p tsconfig.tools.json` (asset pipeline) | **clean, 0 errors** |
 | `vite build` | **succeeds** |
-| Bundle | `index.js` 354 kB (103 kB gzip), `phaser.js` 1 208 kB (332 kB gzip) |
+| Bundle | `index.js` 387 kB (113 kB gzip), `phaser.js` 1 208 kB (332 kB gzip) |
 | `dist/` total | 24 MB (23 MB of it generated artwork) |
 | ZIP package | 225 files, 23.3 MB → **19.4 MB**, all CRCs verified |
 
@@ -36,7 +38,7 @@ node tools/qa/bosswalk.mjs         # all 30 boss arenas
 
 ## 2. Automated tests
 
-`npm test` — **137 tests across 10 files, all passing** (~2 s).
+`npm test` — **164 tests across 12 files, all passing** (~3 s).
 
 | File | Tests | Covers |
 |---|---|---|
@@ -49,7 +51,9 @@ node tools/qa/bosswalk.mjs         # all 30 boss arenas
 | `seasons.test.ts` | 12 | the four-day calendar, season snapshots, the ±15 % damage budget, distinct per-season interactions, and **objective reachability in all four seasons on all 30 stages** |
 | `stagegen.test.ts` | 5 | reachability, checkpoint/boss door/exit on every stage, objective counts, determinism, seasonal gating |
 | `fixtures.test.ts` | 12 | all 30 boss encounters as data: phases, health curve, attack-to-player-health ratio, rewards, and the named mechanics from the stage table |
-| `content.test.ts` | 4 | structural validation of the whole content layer, counts, and the boss-per-stage rule |
+| `content.test.ts` | 6 | structural validation of the whole content layer, counts, the boss-per-stage rule, and **every `t('…')` key in the source being present in the dictionary** |
+| `replay.test.ts` | 15 | the challenge board's unlock rules, reduced repeat payouts, personal bests, **challenges never touching campaign progress or experience**, the six-boss gauntlet's ordering and timing, cloak unlocks and collection totals |
+| `escort.test.ts` | 10 | the cart's leash, wall-following round an obstacle, breaking, self-repair, patching at a stop, and restoration on a retry |
 
 ### What the economy simulation found
 

@@ -27,6 +27,12 @@ export class MapScene extends Phaser.Scene {
   constructor() { super('Map'); }
 
   create(): void {
+    // Phaser reuses the scene instance across restarts, so every per-run
+    // collection is cleared here rather than at its field declaration -
+    // otherwise a second visit would keep the previous run's destroyed
+    // objects and lay new ones on top of them.
+    this.nodes = [];
+    this.detailTexts = [];
     phase.set('HOME');
     this.toaster = new Toaster(this);
     this.cameras.main.setBackgroundColor(0x141a18);

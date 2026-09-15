@@ -12,7 +12,8 @@
  */
 import { spawn } from 'node:child_process';
 import { cpus } from 'node:os';
-import { readFileSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { Canvas, Rand, setDefaultSS } from './art/raster.ts';
 import { buildFigureSheet, packCells, FACINGS, type SheetResult } from './art/sheet.ts';
@@ -35,6 +36,47 @@ const args = process.argv.slice(2);
 const shardArg = args.find((a) => a.startsWith('--shard='));
 const onlyArg = args.find((a) => a.startsWith('--only='));
 const only = onlyArg ? onlyArg.slice('--only='.length).split(',') : null;
+const force = args.includes('--force');
+
+/**
+ * A fingerprint of everything that decides what the artwork looks like: the
+ * generators themselves. If it has not changed and every file the manifest
+ * names is still on disk, there is nothing to rebuild.
+ *
+ * This matters beyond speed. A full build clears the output tree first, so
+ * rebuilding when nothing changed leaves a window in which the committed
+ * artwork is missing from the working tree.
+ */
+function sourceFingerprint(): string {
+  const hash = createHash('sha256');
+  const walk = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (full.endsWith('.ts')) { hash.update(e.name); hash.update(readFileSync(full)); }
+    }
+  };
+  walk(join(process.cwd(), 'tools', 'art'));
+  hash.update(readFileSync(import.meta.filename));
+  return hash.digest('hex').slice(0, 16);
+}
+
+/** True when the manifest on disk was produced by these sources and is intact. */
+function upToDate(fingerprint: string): boolean {
+  const manifestPath = join(OUT_ROOT, 'manifest.json');
+  if (!existsSync(manifestPath)) return false;
+  let m: { sourceHash?: string; bundles?: Record<string, ManifestEntry[]> };
+  try { m = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { return false; }
+  if (m.sourceHash !== fingerprint) return false;
+  for (const list of Object.values(m.bundles ?? {})) {
+    for (const e of list) {
+      for (const f of [e.image, e.data]) {
+        if (f && !existsSync(join(OUT_ROOT, f))) return false;
+      }
+    }
+  }
+  return true;
+}
 
 // --------------------------------------------------------------- job list
 
@@ -327,6 +369,11 @@ async function runShard(index: number, total: number): Promise<void> {
 async function runParallel(): Promise<void> {
   const total = Math.max(1, Math.min(6, cpus().length));
   const t0 = Date.now();
+  const fingerprint = sourceFingerprint();
+  if (!only && !force && upToDate(fingerprint)) {
+    console.log(`Assets are current (sources ${fingerprint}); nothing to build. Use --force to rebuild anyway.`);
+    return;
+  }
   console.log(`Building assets with ${total} workers...`);
   // Only a full build clears the output tree; partial builds overwrite in place.
   if (!only && existsSync(OUT_ROOT)) rmSync(OUT_ROOT, { recursive: true, force: true });
@@ -360,7 +407,10 @@ async function runParallel(): Promise<void> {
   for (const e of merged) (byBundle[e.bundle] ??= []).push(e);
   const totals: Record<string, number> = {};
   for (const [b, list] of Object.entries(byBundle)) totals[b] = list.reduce((s, e) => s + e.bytes, 0);
-  writeJson('manifest.json', { version: 1, generated: new Date().toISOString().slice(0, 10), bundles: byBundle, totals });
+  writeJson('manifest.json', {
+    version: 1, generated: new Date().toISOString().slice(0, 10),
+    sourceHash: fingerprint, bundles: byBundle, totals,
+  });
   const grand = Object.values(totals).reduce((a, b) => a + b, 0);
   console.log(`\nAssets: ${merged.length} files, ${(grand / 1024 / 1024).toFixed(2)} MB total, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   for (const [b, v] of Object.entries(totals).sort((a, b2) => b2[1] - a[1])) {

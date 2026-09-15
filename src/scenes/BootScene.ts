@@ -19,6 +19,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+    // The scene instance is reused if boot is ever re-entered.
+    this.failed = false;
     phase.set('TITLE');
     try {
       await loadManifest();

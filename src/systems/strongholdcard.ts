@@ -193,7 +193,7 @@ export function renderStrongholdCard(scene: Phaser.Scene, state: GameState): HTM
   line(`${t('inv.rings')}  ${found}/${RINGS.length}`, PARCHMENT);
   line(`${t('map.cleared')}  ${state.campaign.cleared.length}/${STAGES.length}`, PARCHMENT);
   line(`${t('home.residents')}  ${state.home.residents.length}/${RESIDENTS.length}`, PARCHMENT);
-  line(`${t('home.build')}  ${state.home.buildings.length}`, PARCHMENT);
+  line(`${t('replay.structures')}  ${state.home.buildings.length}`, PARCHMENT);
   if (state.replay.gauntletBest !== null) {
     line(`${t('replay.gauntlet')}  ${formatMs(state.replay.gauntletBest)}`, GOLD);
   }

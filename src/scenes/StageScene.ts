@@ -135,6 +135,20 @@ export class StageScene extends Phaser.Scene {
   private defence: DefenceState | null = null;
   private cart: EscortCart | null = null;
   /**
+   * Bumped on every init(). create() is async, so a restart while its bundles
+   * are still loading would otherwise let the abandoned run resume and build
+   * its world on top of the new one.
+   */
+  private generation = 0;
+  /**
+   * False until create() has finished building the world. create() is async, so
+   * Phaser marks the scene RUNNING - and starts calling update() - while the
+   * bundles are still loading. Without this, update() would run against the
+   * previous run's destroyed player and map, because Phaser reuses the
+   * instance.
+   */
+  private ready = false;
+  /**
    * Diagnostics for the verification scripts: how many boss attack shapes were
    * resolved, and how much damage the player actually took during the run from
    * any enemy source - melee shapes, projectiles and ground hazards alike.
@@ -169,9 +183,12 @@ export class StageScene extends Phaser.Scene {
       ? { wave: 0, waves: DEFENCE_CHALLENGE.waves, spawnedThisWave: 0, restUntil: 2.5, lost: false }
       : null;
     this.cart = null;
+    this.ready = false;
+    this.generation++;
   }
 
   async create(): Promise<void> {
+    const run = this.generation;
     const state = getState();
     const def = stageById(this.stageId);
     if (!def) { this.scene.start('Title', {}); return; }
@@ -189,6 +206,9 @@ export class StageScene extends Phaser.Scene {
       } catch (err) {
         console.error('[assets]', err);
       }
+      // The scene was restarted while this run was loading: it is no longer the
+      // current one, so it must not touch the scene any further.
+      if (run !== this.generation) return;
     }
     registerAnimations(this);
 
@@ -244,6 +264,7 @@ export class StageScene extends Phaser.Scene {
       stage: this.stageId, objective: def.objective, season: this.season,
       objectiveDone: 0, objectiveTotal: this.objectiveTotal,
     });
+    this.ready = true;
   }
 
   /**
@@ -526,7 +547,7 @@ export class StageScene extends Phaser.Scene {
   // ------------------------------------------------------------ main loop
 
   override update(time: number, delta: number): void {
-    if (!this.player) return;
+    if (!this.ready) return;
     if (phase.isPaused) return;
     if (time < this.hitStopUntil) { this.renderAll(); return; }
 
@@ -1552,6 +1573,7 @@ export class StageScene extends Phaser.Scene {
   private onVisible = (): void => { this.stepper.reset(); };
 
   private cleanup(): void {
+    this.ready = false;
     this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.game.events.off(Phaser.Core.Events.HIDDEN, this.onHidden, this);
     this.game.events.off(Phaser.Core.Events.VISIBLE, this.onVisible, this);
