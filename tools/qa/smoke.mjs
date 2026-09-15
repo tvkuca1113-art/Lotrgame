@@ -13,27 +13,40 @@ const ROOT = new URL('../../dist/', import.meta.url).pathname;
 const SHOTS = new URL('../../qa-shots/', import.meta.url).pathname;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.wav': 'audio/wav', '.css': 'text/css' };
 
-function serve(port) {
-  return new Promise((resolve) => {
-    const server = createServer(async (req, res) => {
-      const url = decodeURIComponent((req.url ?? '/').split('?')[0]);
-      let file = join(ROOT, url === '/' ? 'index.html' : url);
-      try {
-        const s = await stat(file);
-        if (s.isDirectory()) file = join(file, 'index.html');
-        const data = await readFile(file);
-        res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
-        res.end(data);
-      } catch {
-        res.writeHead(404); res.end('not found');
-      }
-    });
-    server.listen(port, () => resolve(server));
+function makeServer() {
+  return createServer(async (req, res) => {
+    const url = decodeURIComponent((req.url ?? '/').split('?')[0]);
+    let file = join(ROOT, url === '/' ? 'index.html' : url);
+    try {
+      const s = await stat(file);
+      if (s.isDirectory()) file = join(file, 'index.html');
+      const data = await readFile(file);
+      res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
+      res.end(data);
+    } catch {
+      res.writeHead(404); res.end('not found');
+    }
   });
 }
 
-const PORT = 4179;
-const server = await serve(PORT);
+const BASE_PORT = 4179;
+
+/** Binds to the first free port from BASE_PORT, so a stale process from an
+ *  earlier run cannot void this one with EADDRINUSE. */
+async function listenFree(server, from) {
+  for (let port = from; port < from + 20; port++) {
+    const ok = await new Promise((resolve) => {
+      const onError = (e) => { server.removeListener('error', onError); resolve(e.code !== 'EADDRINUSE' ? Promise.reject(e) : false); };
+      server.once('error', onError);
+      server.listen(port, () => { server.removeListener('error', onError); resolve(true); });
+    });
+    if (ok) return port;
+  }
+  throw new Error(`no free port in ${from}..${from + 19}`);
+}
+
+const server = makeServer();
+const PORT = await listenFree(server, BASE_PORT);
 await mkdir(SHOTS, { recursive: true });
 
 const profile = process.argv.includes('--mobile') ? 'mobile' : 'desktop';

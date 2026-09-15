@@ -13,6 +13,22 @@ const ROOT = new URL('../../dist/', import.meta.url).pathname;
 const SHOTS = new URL('../../qa-shots/', import.meta.url).pathname;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.css': 'text/css' };
 
+const BASE_PORT = 4181;
+
+/** Binds to the first free port from BASE_PORT, so a stale process from an
+ *  earlier run cannot void this one with EADDRINUSE. */
+async function listenFree(srv, from) {
+  for (let port = from; port < from + 20; port++) {
+    const ok = await new Promise((resolve) => {
+      const onError = (e) => { srv.removeListener('error', onError); if (e.code !== 'EADDRINUSE') throw e; resolve(false); };
+      srv.once('error', onError);
+      srv.listen(port, () => { srv.removeListener('error', onError); resolve(true); });
+    });
+    if (ok) return port;
+  }
+  throw new Error(`no free port in ${from}..${from + 19}`);
+}
+
 const server = await new Promise((resolve) => {
   const s = createServer(async (req, res) => {
     const url = decodeURIComponent((req.url ?? '/').split('?')[0]);
@@ -25,7 +41,7 @@ const server = await new Promise((resolve) => {
       res.end(data);
     } catch { res.writeHead(404); res.end('nf'); }
   });
-  s.listen(4181, () => resolve(s));
+  listenFree(s, BASE_PORT).then((p) => { s.__port = p; resolve(s); });
 });
 await mkdir(SHOTS, { recursive: true });
 
@@ -51,7 +67,7 @@ for (const stage of only) {
   const before = allErrors.length;
   const row = { stage, ok: false, note: '' };
   try {
-    await page.goto(`http://127.0.0.1:4181/?qa=1&fixture=${stage}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`http://127.0.0.1:${server.__port}/?qa=1&fixture=${stage}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => {
       const s = window.__hearth?.scene('Stage');
       return !!s && !!s.player && !!s.map;

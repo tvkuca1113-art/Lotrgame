@@ -11,21 +11,34 @@ import { join, extname } from 'node:path';
 const ROOT = new URL('../../dist/', import.meta.url).pathname;
 const SHOTS = new URL('../../qa-shots/', import.meta.url).pathname;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png' };
-const PORT = 4183;
+const BASE_PORT = 4183;
 
-const server = await new Promise((resolve) => {
-  const s = createServer(async (req, res) => {
-    const url = decodeURIComponent((req.url ?? '/').split('?')[0]);
-    let file = join(ROOT, url === '/' ? 'index.html' : url);
-    try {
-      const st = await stat(file);
-      if (st.isDirectory()) file = join(file, 'index.html');
-      res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
-      res.end(await readFile(file));
-    } catch { res.writeHead(404); res.end('nf'); }
-  });
-  s.listen(PORT, () => resolve(s));
+/** Binds to the first free port from BASE_PORT, so a stale process from an
+ *  earlier run cannot void this one with EADDRINUSE. */
+async function listenFree(server, from) {
+  for (let port = from; port < from + 20; port++) {
+    const ok = await new Promise((resolve) => {
+      const onError = (e) => { server.removeListener('error', onError); resolve(e.code !== 'EADDRINUSE' ? Promise.reject(e) : false); };
+      server.once('error', onError);
+      server.listen(port, () => { server.removeListener('error', onError); resolve(true); });
+    });
+    if (ok) return port;
+  }
+  throw new Error(`no free port in ${from}..${from + 19}`);
+}
+
+
+const server = createServer(async (req, res) => {
+  const url = decodeURIComponent((req.url ?? '/').split('?')[0]);
+  let file = join(ROOT, url === '/' ? 'index.html' : url);
+  try {
+    const st = await stat(file);
+    if (st.isDirectory()) file = join(file, 'index.html');
+    res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' });
+    res.end(await readFile(file));
+  } catch { res.writeHead(404); res.end('nf'); }
 });
+const PORT = await listenFree(server, BASE_PORT);
 await mkdir(SHOTS, { recursive: true });
 
 const mobile = process.argv.includes('--mobile');
