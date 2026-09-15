@@ -395,8 +395,12 @@ export class Boss extends Actor {
     return this.weakPoint > 0 ? 1.6 : 1;
   }
 
+  /**
+   * Drop the reference to the current telegraph. The effect pool owns that
+   * sprite and recycles it on its own schedule - destroying it here would hand
+   * a dead object back to the pool.
+   */
   clearTelegraph(): void {
-    this.telegraphSprite?.destroy();
     this.telegraphSprite = null;
   }
 

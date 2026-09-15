@@ -35,6 +35,8 @@ export class UIScene extends Phaser.Scene {
   private staminaBar!: Bar;
   private xpBar!: Bar;
   private bossBar!: Bar;
+  private cartBar!: Bar;
+  private cartText!: Phaser.GameObjects.Text;
   private bossName!: Phaser.GameObjects.Text;
   private objectiveText!: Phaser.GameObjects.Text;
   private seasonText!: Phaser.GameObjects.Text;
@@ -64,6 +66,7 @@ export class UIScene extends Phaser.Scene {
 
     this.stage.events.on('hud', this.onHud, this);
     this.stage.events.on('objective', this.onObjective, this);
+    this.stage.events.on('escort', this.onEscort, this);
     this.stage.events.on('toast', (msg: string, icon?: string, dur?: number) => this.toaster.show(msg, { icon, duration: dur }), this);
     this.stage.events.on('tutorial', (key: string) => this.showTutorial(key), this);
     this.stage.events.on('prompt', (text: string | null) => this.showPrompt(text), this);
@@ -96,6 +99,10 @@ export class UIScene extends Phaser.Scene {
     this.staminaBar = new Bar(this, 0, 0, 200, 12, 'bar_stamina').setDepth(10);
     this.xpBar = new Bar(this, 0, 0, 160, 8, 'bar_xp').setDepth(10);
     this.bossBar = new Bar(this, 0, 0, 480, 22, 'bar_boss', true).setDepth(12).setVisible(false);
+    this.cartBar = new Bar(this, 0, 0, 220, 14, 'bar_health').setDepth(11).setVisible(false);
+    this.cartText = this.add.text(0, 0, '', { fontFamily: FONT_BODY, fontSize: '12px', color: HEX.parchment })
+      .setOrigin(0.5, 1).setDepth(11).setVisible(false);
+    this.cartText.setStroke(HEX.ink, 4);
     this.bossName = this.add.text(0, 0, '', { fontFamily: FONT_TITLE, fontSize: '19px', color: HEX.parchment })
       .setOrigin(0.5, 1).setDepth(12).setVisible(false);
     this.bossName.setStroke(HEX.ink, 5);
@@ -270,6 +277,10 @@ export class UIScene extends Phaser.Scene {
 
     this.bossBar.setPosition(w / 2 - (compact ? 150 : 240), h - (this.touch ? 172 : 64));
     this.bossBar.resize(compact ? 300 : 480);
+    const cartW = compact ? 170 : 220;
+    this.cartBar.setPosition(w / 2 - cartW / 2, h - (this.touch ? 206 : 98));
+    this.cartBar.resize(cartW);
+    this.cartText.setPosition(w / 2, h - (this.touch ? 210 : 102));
     this.bossName.setPosition(w / 2, h - (this.touch ? 178 : 70));
 
     this.promptText.setPosition(w / 2, h * 0.68);
@@ -368,6 +379,16 @@ export class UIScene extends Phaser.Scene {
 
   private onObjective(d: { done: number; total: number; key: string }): void {
     this.objectiveText.setText(`${t(d.key)}  ${d.done}/${d.total}`);
+  }
+
+  /** The escort cart's condition, shown only while a cart is on the route. */
+  private onEscort(d: { health: number; maxHealth: number; broken: boolean; moving: boolean }): void {
+    this.cartBar.setVisible(true);
+    this.cartText.setVisible(true);
+    this.cartBar.set(d.health, d.maxHealth);
+    this.cartBar.tick(1 / 60);
+    this.cartText.setText(d.broken ? t('escort.broken') : `${t('escort.cart')} ${Math.max(0, Math.round(d.health))}/${d.maxHealth}${d.moving ? '' : `  ·  ${t('escort.waiting')}`}`);
+    this.cartText.setColor(d.broken ? HEX.danger : d.moving ? HEX.parchment : HEX.muted);
   }
 
   private onXp(amount: number): void {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { RingSlot, Season } from '@/types';
+import type { ResourceBundle, RingSlot, Season } from '@/types';
 import { stageById } from '@/content/stages';
 import { bossByStage } from '@/content/bosses';
 import { enemyById, scaleEnemy, PROJECTILES } from '@/content/enemies';
@@ -15,16 +15,24 @@ import { InputManager } from '@/systems/input';
 import { phase, FixedStep } from '@/systems/gamestate';
 import { REGION_BUNDLE, loadBundle, playerSheet, gearBundle, registerAnimations } from '@/systems/assets';
 import { generateStage, isBlockedAt, type StageMap, type NodeSpawn } from '@/world/stagegen';
+import { generateHome, type HomeMap } from '@/world/homegen';
+import { DEFENCE_CHALLENGE } from '@/content/buildings';
 import { WorldRenderer, WeatherLayer, DEPTH } from '@/world/renderer';
 import { EffectPool, FloatingText } from '@/entities/effects';
 import { Player } from '@/entities/player';
 import { Enemy } from '@/entities/enemy';
 import { Boss } from '@/entities/boss';
+import { EscortCart } from '@/entities/cart';
 import { ProjectilePool } from '@/entities/projectile';
 import { play, panFor } from '@/audio/library';
 import { music, ambience } from '@/audio/music';
 import { TILE, normalise } from '@/systems/iso';
-import { completeStage, setCheckpoint, claimExploration, recordBestiary } from '@/systems/campaign';
+import { completeStage, setCheckpoint, claimExploration, recordBestiary, type CompletionResult } from '@/systems/campaign';
+import { grant } from '@/systems/economy';
+import {
+  completeChallenge, advanceGauntlet, bossBoard, hardStages, gauntletEntry,
+  GAUNTLET_STAGES, type GauntletRun, type ChallengeEntry,
+} from '@/systems/replay';
 import { saveGame } from '@/systems/save';
 import { claimRunReward, rewardId } from '@/systems/economy';
 import { discoverRing } from '@/systems/rings';
@@ -35,8 +43,33 @@ export interface StageSceneData {
   resume?: boolean;
   hard?: boolean;
   fresh?: boolean;
+  /** Replay challenge: this run scores against the challenge board, not the campaign. */
+  challenge?: ChallengeRun;
+  /** Settlement defence: capped waves at home, nothing at stake. */
+  defence?: boolean;
   /** Development fixture: skip the approach and open at the boss door. */
   fixture?: { stage: number; atBoss: boolean };
+}
+
+/** A replay run in progress. The gauntlet carries its state between fights. */
+export interface ChallengeRun {
+  id: string;
+  kind: 'boss' | 'hard' | 'gauntlet';
+  run?: GauntletRun;
+}
+
+/**
+ * The settlement defence: a fixed number of waves, started deliberately from
+ * the challenge board. Failing costs nothing - no structure is damaged, no
+ * resource is lost - so it can never become a thing the player must defend
+ * against on a schedule.
+ */
+interface DefenceState {
+  wave: number;
+  waves: number;
+  spawnedThisWave: number;
+  restUntil: number;
+  lost: boolean;
 }
 
 interface GroundHazard {
@@ -98,13 +131,24 @@ export class StageScene extends Phaser.Scene {
   private pendingComplete = false;
   private lastSaveAt = 0;
   private fixture: { stage: number; atBoss: boolean } | null = null;
+  private challenge: ChallengeRun | null = null;
+  private defence: DefenceState | null = null;
+  private cart: EscortCart | null = null;
+  /**
+   * Diagnostics for the verification scripts: how many boss attack shapes were
+   * resolved, and how much damage the player actually took during the run from
+   * any enemy source - melee shapes, projectiles and ground hazards alike.
+   */
+  bossHitsResolved = 0;
+  bossDamageTaken = 0;
 
   constructor() { super('Stage'); }
 
   init(data: StageSceneData): void {
     this.stageId = data.stage ?? 1;
     this.tutorial = data.tutorial ?? false;
-    this.hardMode = data.hard ?? false;
+    this.challenge = data.challenge ?? null;
+    this.hardMode = data.hard ?? this.challenge?.kind === 'hard';
     this.enemies = [];
     this.boss = null;
     this.hazards = [];
@@ -121,6 +165,10 @@ export class StageScene extends Phaser.Scene {
     this.exitArmed = false;
     this.tutorialStep = 0;
     this.fixture = data.fixture ?? null;
+    this.defence = data.defence
+      ? { wave: 0, waves: DEFENCE_CHALLENGE.waves, spawnedThisWave: 0, restUntil: 2.5, lost: false }
+      : null;
+    this.cart = null;
   }
 
   async create(): Promise<void> {
@@ -129,8 +177,9 @@ export class StageScene extends Phaser.Scene {
     if (!def) { this.scene.start('Title', {}); return; }
     this.season = state.calendar.season;
 
-    // Region and gear bundles load on demand.
-    const bundles = [REGION_BUNDLE[def.region]];
+    // Region and gear bundles load on demand. The defence draws its raiders
+    // from the borderland set, which is not part of the core bundle.
+    const bundles = [this.defence ? REGION_BUNDLE.borderland : REGION_BUNDLE[def.region]];
     const weaponDef = equipmentById(state.player.equipment.weapon);
     const gb = gearBundle(weaponDef?.gearTier ?? 0);
     if (gb) bundles.push(gb);
@@ -143,8 +192,8 @@ export class StageScene extends Phaser.Scene {
     }
     registerAnimations(this);
 
-    this.map = generateStage(def, this.season);
-    this.world = new WorldRenderer(this, def.region, this.season);
+    this.map = this.defence ? generateHome(state, this.season) : generateStage(def, this.season);
+    this.world = new WorldRenderer(this, this.defence ? 'home' : def.region, this.season);
     this.world.drawGround(this.map);
     this.effects = new EffectPool(this, this.world, state.settings.particleQuality);
     this.floaters = new FloatingText(this, this.world);
@@ -162,7 +211,8 @@ export class StageScene extends Phaser.Scene {
     this.spawnWorld();
     this.setupRings();
 
-    this.objectiveTotal = def.objective.count;
+    this.objectiveTotal = this.defence ? this.defence.waves : def.objective.count;
+    if (!this.defence && def.objective.kind === 'escort') this.spawnCart();
     this.startFlask = state.player.flaskCharges;
 
     const cam = this.cameras.main;
@@ -185,7 +235,10 @@ export class StageScene extends Phaser.Scene {
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.onHidden, this);
     this.game.events.on(Phaser.Core.Events.VISIBLE, this.onVisible, this);
 
+    if (this.defence) this.events.emit('toast', t('replay.defence_note'), 'shield', 5200);
     if (this.fixture) this.applyFixture();
+    else if (this.challenge && this.challenge.kind !== 'hard') this.openAtBoss();
+    if (this.challenge?.run) this.applyGauntletCarry(this.challenge.run);
     if (this.tutorial) this.events.emit('tutorial', 'tutorial.move');
     this.events.emit('stage:ready', {
       stage: this.stageId, objective: def.objective, season: this.season,
@@ -198,6 +251,16 @@ export class StageScene extends Phaser.Scene {
    * door and clear the approach so the arena can be inspected immediately.
    */
   private applyFixture(): void {
+    this.openAtBoss();
+    this.events.emit('toast', `fixture: stage ${this.stageId}`, 'skull', 3200);
+  }
+
+  /**
+   * Clears the approach and puts the player at the boss door. Used by the
+   * development fixtures and by boss-board and gauntlet challenge runs, where
+   * the point is the fight, not the walk to it.
+   */
+  private openAtBoss(): void {
     for (const node of this.nodes) {
       if (node.kind === 'objective' || node.kind === 'escortStop') {
         node.done = true;
@@ -206,7 +269,7 @@ export class StageScene extends Phaser.Scene {
       }
     }
     this.exitArmed = true;
-    if (!this.fixture?.atBoss) return;
+    if (this.fixture && !this.fixture.atBoss) return;
     for (const e of this.enemies) e.destroy();
     this.enemies.length = 0;
     const door = this.nodes.find((n) => n.kind === 'bossdoor');
@@ -214,7 +277,165 @@ export class StageScene extends Phaser.Scene {
       this.player.x = door.x - TILE;
       this.player.y = door.y;
     }
-    this.events.emit('toast', `fixture: stage ${this.stageId}`, 'skull', 3200);
+  }
+
+  // ---------------------------------------------------------------- escort
+
+  /**
+   * Puts the cart at the stage entrance. Its health scales with the stage so
+   * it is a real thing to protect without being a timer in disguise.
+   */
+  private spawnCart(): void {
+    const stops = this.nodes.filter((n) => n.kind === 'escortStop');
+    if (stops.length === 0) return;
+    this.cart = new EscortCart(
+      this, this.world, this.season,
+      this.map.entrance.x * TILE + TILE, this.map.entrance.y * TILE,
+      420 + this.stageId * 26,
+    );
+    this.events.emit('toast', t('escort.start'), 'move', 5200);
+  }
+
+  /**
+   * Rolls the cart toward its next stop and reports arrivals. A broken cart
+   * stops where it stands and repairs itself, so a failed defence costs time,
+   * never progress.
+   */
+  private stepCart(dt: number): void {
+    const cart = this.cart;
+    if (!cart) return;
+    const stops = this.nodes.filter((n) => n.kind === 'escortStop');
+    const next = stops.find((n) => !n.done) ?? null;
+    const moved = cart.step(dt, next, this.player, (x, y) => isBlockedAt(this.map, x, y));
+    if (moved.repaired) {
+      this.events.emit('toast', t('escort.repaired'), 'check', 3600);
+      play('checkpoint');
+    }
+    if (moved.arrived && next) {
+      cart.repairAtStop();
+      this.completeNode(next);
+      this.events.emit('toast', t('escort.stop_reached'), 'check', 3200);
+    }
+    // Raiders that reach the cart batter it instead of chasing past it.
+    for (const e of this.enemies) {
+      if (!e.alive || cart.broken) continue;
+      const d = Math.hypot(e.x - cart.x, e.y - cart.y);
+      if (d < cart.radius + e.radius + 6) {
+        const dealt = cart.takeDamage(e.def.damage * dt * 0.7);
+        if (dealt > 0 && cart.broken) {
+          this.events.emit('toast', t('escort.broken'), 'skull', 4200);
+          play('player_die', { volume: 0.4 });
+        }
+      }
+    }
+    this.events.emit('escort', {
+      health: cart.health, maxHealth: cart.maxHealth,
+      broken: cart.broken, moving: cart.moving,
+      done: this.objectiveDone, total: this.objectiveTotal,
+    });
+  }
+
+  // ------------------------------------------------------- settlement defence
+
+  /**
+   * Runs the wave clock. Raiders walk in from the edge of the plot and head for
+   * the player; a wave ends when every raider in it is down, and the run ends
+   * after a fixed number of waves. There is no fail state beyond the player
+   * falling, and nothing in the settlement can be damaged.
+   */
+  private stepDefence(dt: number): void {
+    const d = this.defence!;
+    if (this.pendingComplete) return;
+    if (d.restUntil > 0) {
+      d.restUntil -= dt;
+      if (d.restUntil <= 0) this.startDefenceWave();
+      return;
+    }
+    if (this.enemies.length > 0) return;
+    // Wave cleared.
+    if (d.wave >= d.waves) { this.finishStage(); return; }
+    d.restUntil = 6;
+    this.events.emit('toast', t('hud.wave_clear'), 'check', 2600);
+    play('checkpoint');
+  }
+
+  private startDefenceWave(): void {
+    const d = this.defence!;
+    d.wave += 1;
+    const state = getState();
+    const diff = difficultyOf(state);
+    const level = Math.min(30, 16 + d.wave * 2);
+    const pool = DEFENCE_CHALLENGE.waveEnemies.slice(0, Math.min(DEFENCE_CHALLENGE.waveEnemies.length, 2 + d.wave));
+    const count = 3 + Math.floor(d.wave * 1.4);
+    const home = this.map as HomeMap;
+    const centre = { x: home.homeAnchor.x, y: home.homeAnchor.y };
+    for (let i = 0; i < count; i++) {
+      const id = pool[(i + d.wave) % pool.length]!;
+      const base = enemyById(id);
+      if (!base) continue;
+      const ang = (i / count) * Math.PI * 2 + d.wave * 0.7;
+      const radius = TILE * 9;
+      let x = centre.x + Math.cos(ang) * radius;
+      let y = centre.y + Math.sin(ang) * radius;
+      // Nudge off any blocked tile so nothing spawns inside scenery.
+      for (let tries = 0; tries < 8 && isBlockedAt(this.map, x, y); tries++) {
+        x = centre.x + Math.cos(ang) * (radius - tries * TILE * 0.7);
+        y = centre.y + Math.sin(ang) * (radius - tries * TILE * 0.7);
+      }
+      const scaled = scaleEnemy(base, level);
+      const elite = d.wave >= d.waves && i === 0;
+      const enemy = new Enemy(
+        this, this.world, this.effects, this.map,
+        { ...scaled, health: Math.round(scaled.health * diff.enemyHealth) },
+        x, y, d.wave, elite, diff.telegraphScale,
+      );
+      this.enemies.push(enemy);
+    }
+    d.spawnedThisWave = count;
+    this.objectiveDone = d.wave - 1;
+    this.events.emit('objective', {
+      done: this.objectiveDone, total: this.objectiveTotal, key: 'replay.defence',
+    });
+    this.events.emit('toast', t('replay.defence_wave', d.wave, d.waves), 'skull', 3200);
+    play('boss_intro', { volume: 0.5 });
+    music.setIntensity(0.5 + d.wave / d.waves * 0.5);
+  }
+
+  /**
+   * The defence pays cosmetic banners and a modest purse, and records nothing
+   * that could be lost. A defeat here ends the run without a campaign death.
+   */
+  private finishDefence(survived: boolean): void {
+    const state = getState();
+    const d = this.defence!;
+    state.player.flaskCharges = state.player.flaskMax;
+    let granted: ResourceBundle = {};
+    if (survived) {
+      if (!state.replay.banners.includes('watch')) state.replay.banners.push('watch');
+      granted = grant(state, { gold: 600 + 90 * d.waves, shards: 20 });
+    }
+    updateState(() => { /* notify listeners */ });
+    void saveGame(state);
+    this.scene.stop('UI');
+    this.scene.start('Result', {
+      stage: this.stageId,
+      result: {
+        granted, xp: 0, levels: 0, ringDiscovered: null, duplicateShards: 0,
+        slotUnlocked: null, residentRescued: null, monumentUnlocked: false,
+        seasonChanged: false, firstClear: false, trophy: null,
+      } satisfies CompletionResult,
+      explore: {},
+      elapsedMs: this.elapsedMs,
+      bossDefeated: survived,
+      defence: { survived, waves: survived ? d.waves : d.wave, total: d.waves },
+    });
+  }
+
+  /** The gauntlet carries health and flask charges from the previous fight. */
+  private applyGauntletCarry(run: GauntletRun): void {
+    this.player.health = Math.max(1, Math.round(this.player.maxHealth * Phaser.Math.Clamp(run.carryHealth, 0.15, 1)));
+    this.player.flask = Math.max(0, Math.min(this.player.flaskMax, run.flask));
+    this.events.emit('toast', t('replay.gauntlet_progress', run.index + 1, GAUNTLET_STAGES.length), 'guardian', 3600);
   }
 
   // --------------------------------------------------------------- setup
@@ -245,6 +466,8 @@ export class StageScene extends Phaser.Scene {
     const def = stageById(this.stageId)!;
     const state = getState();
     const diff = difficultyOf(state);
+    // The defence field starts clear; everything arrives in waves.
+    if (this.defence) return;
     for (const e of this.map.enemies) {
       const base = enemyById(e.id);
       if (!base) continue;
@@ -398,12 +621,15 @@ export class StageScene extends Phaser.Scene {
     this.stepDecoys(dt);
 
     // ---------------------------------------------------------- triggers
+    if (this.cart) this.stepCart(dt);
+    if (this.defence) this.stepDefence(dt);
     this.checkTriggers();
     void state;
   }
 
   private renderAll(): void {
     this.player.render();
+    this.cart?.render();
     for (const e of this.enemies) e.render();
     this.boss?.render();
     this.projectiles.render();
@@ -469,7 +695,7 @@ export class StageScene extends Phaser.Scene {
         }
       } else if (reduction > 0.4) {
         play('hit_shield');
-        this.floaters.show(target.x, target.y, t('hud.guarded') === 'hud.guarded' ? 'Blocked' : t('hud.guarded'), '#95B6C6', 13);
+        this.floaters.show(target.x, target.y, t('hud.guarded'), '#95B6C6', 13);
       }
     }
     this.effects.play(p.weapon.family === 'axe' ? 'slash_heavy' : 'slash_light', p.x, p.y, { angle: shape.angle });
@@ -507,6 +733,7 @@ export class StageScene extends Phaser.Scene {
       fromX: shape.x, fromY: shape.y, poise,
     });
     if (dealt > 0) {
+      this.bossDamageTaken += dealt;
       this.floaters.show(p.x, p.y, `-${dealt}`, '#E08B72', 16);
       this.effects.play('blood_spray', p.x, p.y);
       this.shakeCamera(0.006, 120);
@@ -535,7 +762,10 @@ export class StageScene extends Phaser.Scene {
         if (p.alive && Math.hypot(p.x - proj.x, p.y - proj.y) < p.radius + proj.radius) {
           const diff = difficultyOf(getState());
           const dealt = p.takeDamage({ amount: Math.round(proj.damage * diff.incomingDamage), source: 'weapon', fromX: proj.x, fromY: proj.y, poise: 6 });
-          if (dealt > 0) this.floaters.show(p.x, p.y, `-${dealt}`, '#E08B72', 16);
+          if (dealt > 0) {
+            this.bossDamageTaken += dealt;
+            this.floaters.show(p.x, p.y, `-${dealt}`, '#E08B72', 16);
+          }
           proj.impact(this.effects);
           continue;
         }
@@ -629,7 +859,7 @@ export class StageScene extends Phaser.Scene {
         }
         if (n > 0) {
           play('fire');
-          this.events.emit('toast', t('hud.path_cleared') === 'hud.path_cleared' ? 'The way is clear.' : t('hud.path_cleared'));
+          this.events.emit('toast', t('hud.path_cleared'));
           if (this.tutorial && this.tutorialStep === 4) this.advanceTutorial();
         }
         return n;
@@ -751,6 +981,7 @@ export class StageScene extends Phaser.Scene {
     if (boss.hitRequest) {
       const req = boss.hitRequest;
       boss.hitRequest = null;
+      this.bossHitsResolved++;
       this.applyEnemyAttack(req.shape, req.damage, req.poise);
       if (req.attack.vfx) this.effects.play(req.attack.vfx, req.shape.x, req.shape.y, { angle: req.shape.angle });
       if (req.attack.shape === 'circle' || req.attack.shape === 'ring') this.shakeCamera(0.01, 220);
@@ -784,7 +1015,10 @@ export class StageScene extends Phaser.Scene {
         highContrast: getState().settings.highContrast,
       });
     }
-    if (boss.state !== 'telegraph' && boss.telegraphSprite) boss.clearTelegraph();
+    if (boss.state !== 'telegraph' && boss.telegraphSprite) {
+      this.effects.cancel(boss.telegraphSprite);
+      boss.clearTelegraph();
+    }
 
     // The Hush-Caller silences rings while the player stands in its zone.
     for (const hz of this.hazards) {
@@ -887,6 +1121,7 @@ export class StageScene extends Phaser.Scene {
 
   private checkTriggers(): void {
     const p = this.player;
+    if (this.defence) { this.interactTarget = null; this.events.emit('prompt', null); return; }
     // Interaction prompt.
     this.interactTarget = null;
     let bestDist = 90;
@@ -896,6 +1131,8 @@ export class StageScene extends Phaser.Scene {
       const d = Math.hypot(node.x - p.x, node.y - p.y);
       if (d < bestDist) {
         if (node.kind === 'exit' && !this.exitArmed) continue;
+        // With a cart on the route, a stop counts when the cart arrives.
+        if (node.kind === 'escortStop' && this.cart) continue;
         if (node.kind === 'ringsight' && !this.ringSightHeld(node.data ?? '')) continue;
         bestDist = d;
         this.interactTarget = { node, kind: node.kind };
@@ -1075,6 +1312,13 @@ export class StageScene extends Phaser.Scene {
   }
 
   private onPlayerDeath(): void {
+    if (this.defence && !this.pendingComplete) {
+      this.defence.lost = true;
+      this.pendingComplete = true;
+      phase.set('STAGE_COMPLETE');
+      this.time.delayedCall(1400, () => this.finishDefence(false));
+      return;
+    }
     phase.set('DEFEATED');
     play('player_die');
     music.setIntensity(0);
@@ -1128,6 +1372,11 @@ export class StageScene extends Phaser.Scene {
     } else {
       this.player.x = this.map.entrance.x * TILE;
       this.player.y = this.map.entrance.y * TILE;
+      // The cart waits at the last stop it reached; stops already made stand.
+      if (this.cart) {
+        const reached = this.nodes.filter((n) => n.kind === 'escortStop' && n.done).at(-1);
+        this.cart.reset(reached?.x ?? this.map.entrance.x * TILE + TILE, reached?.y ?? this.map.entrance.y * TILE);
+      }
       // Re-spawn the approach encounters; already-collected loot stays collected.
       this.spawnWorld();
       phase.set('EXPLORING');
@@ -1151,6 +1400,8 @@ export class StageScene extends Phaser.Scene {
     if (this.pendingComplete) return;
     this.pendingComplete = true;
     phase.set('STAGE_COMPLETE');
+    if (this.defence) { this.finishDefence(!this.defence.lost); return; }
+    if (this.challenge) { this.finishChallenge(); return; }
     const state = getState();
     const fraction = Math.min(1, 0.4 + this.objectiveDone / Math.max(1, this.objectiveTotal) * 0.6);
     const explore = claimExploration(state, this.stageId, fraction);
@@ -1163,6 +1414,65 @@ export class StageScene extends Phaser.Scene {
       stage: this.stageId, result, explore, elapsedMs: this.elapsedMs,
       bossDefeated: this.bossDefeated,
     });
+  }
+
+  /**
+   * Challenge runs never touch campaign progress: no stage is marked cleared,
+   * no story beat fires, no season advances. They pay their own reward and
+   * record a personal best, in one persisted transaction like every other
+   * grant.
+   */
+  private finishChallenge(): void {
+    const ch = this.challenge!;
+    const state = getState();
+    const entry = this.challengeEntry(ch);
+    state.player.flaskCharges = state.player.flaskMax;
+
+    if (ch.kind === 'gauntlet' && ch.run) {
+      ch.run.carryHealth = this.player.health / Math.max(1, this.player.maxHealth);
+      ch.run.flask = this.player.flask;
+      const step = advanceGauntlet(state, ch.run, this.elapsedMs);
+      if (!step.done && step.nextStage !== null) {
+        updateState(() => { /* notify listeners */ });
+        void saveGame(state);
+        this.scene.stop('UI');
+        this.scene.start('Stage', { stage: step.nextStage, challenge: ch });
+        return;
+      }
+    }
+
+    const granted = completeChallenge(state, entry, ch.kind === 'gauntlet' && ch.run ? ch.run.elapsedMs : this.elapsedMs);
+    updateState(() => { /* notify listeners */ });
+    void saveGame(state);
+    this.scene.stop('UI');
+    this.scene.start('Result', {
+      stage: this.stageId,
+      result: {
+        granted, xp: 0, levels: 0, ringDiscovered: null, duplicateShards: 0,
+        slotUnlocked: null, residentRescued: null, monumentUnlocked: false,
+        seasonChanged: false, firstClear: false, trophy: null,
+      } satisfies CompletionResult,
+      explore: {},
+      elapsedMs: ch.kind === 'gauntlet' && ch.run ? ch.run.elapsedMs : this.elapsedMs,
+      bossDefeated: this.bossDefeated,
+      challenge: { id: ch.id, kind: ch.kind },
+    });
+  }
+
+  private challengeEntry(ch: ChallengeRun): ChallengeEntry {
+    const state = getState();
+    if (ch.kind === 'gauntlet') return gauntletEntry(state);
+    const pool = ch.kind === 'hard' ? hardStages(state) : bossBoard(state);
+    const found = pool.find((e) => e.id === ch.id);
+    if (found) return found;
+    // The board filters by unlock state; a run already in progress still needs
+    // an entry to pay out against.
+    return {
+      id: ch.id, kind: ch.kind, stage: this.stageId,
+      nameKey: 'common.stage', descKey: 'common.stage',
+      unlocked: true, cleared: false, best: null,
+      reward: { gold: Math.round((80 + 35 * this.stageId) * 0.5), shards: Math.max(1, Math.round(this.stageId * 0.5)) },
+    };
   }
 
   // ------------------------------------------------------------ tutorial
@@ -1260,6 +1570,8 @@ export class StageScene extends Phaser.Scene {
     this.roots.length = 0;
     for (const d of this.decoys) d.sprite?.destroy();
     this.decoys.length = 0;
+    this.cart?.destroy();
+    this.cart = null;
     this.world?.destroy();
     this.events.removeAllListeners();
   }

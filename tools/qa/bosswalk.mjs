@@ -43,7 +43,9 @@ page.on('console', (m) => { if (m.type() === 'error') allErrors.push(m.text()); 
 page.on('pageerror', (e) => allErrors.push(`pageerror: ${e.message}`));
 page.on('response', (r) => { if (r.status() >= 400) allErrors.push(`${r.status()} ${r.url()}`); });
 
-const only = process.argv[2] ? [Number(process.argv[2])] : Array.from({ length: 30 }, (_, i) => i + 1);
+const only = process.argv.length > 2
+  ? process.argv.slice(2).flatMap((a) => a.split(',')).map(Number).filter((n) => n >= 1 && n <= 30)
+  : Array.from({ length: 30 }, (_, i) => i + 1);
 
 for (const stage of only) {
   const before = allErrors.length;
@@ -71,44 +73,57 @@ for (const stage of only) {
       if (!s.inBossFight) return { error: 'fight never started' };
 
       const def = s.boss.def;
+      s.bossHitsResolved = 0;
+      s.bossDamageTaken = 0;
       const info = {
         id: def.id, arena: def.arena, maxHealth: s.boss.maxHealth,
         phases: def.phases.length, attacks: def.attacks.length,
         phasesEntered: [], telegraphsSeen: 0, hitsRequested: 0,
-        attacksUsed: [], defeated: false, finalPhase: 0,
+        attacksUsed: [], defeated: false, finalPhase: 0, damageTaken: 0,
       };
       s.boss.onPhaseChange = (p, i) => info.phasesEntered.push(`${i}:${p.id}`);
 
-      // Stand in melee range so the boss actually commits to its attacks.
-      const chunk = s.boss.maxHealth / 300;
-      for (let i = 0; i < 1400; i++) {
+      // Stand in melee range so the boss actually commits to its attacks. The
+      // kill is deliberately slow (about 900 frames of chip damage) so every
+      // boss gets through several attack cycles before it dies.
+      const chunk = s.boss.maxHealth / 900;
+      for (let i = 0; i < 3000; i++) {
         await frame();
         if (!s.boss) break;
-        s.player.invulnerable = 9999;
+        // The player is NOT made invulnerable: boss attacks must actually
+        // land, so the run proves the damage path works. Health is topped up
+        // each frame instead, which keeps the fight going without hiding hits.
         s.player.health = s.player.maxHealth;
+        s.player.phase = s.player.phase === 'hurt' ? 'idle' : s.player.phase;
         const b = s.boss;
         // Follow the boss so it never falls out of its attack bands.
         const dx = b.x - s.player.x, dy = b.y - s.player.y;
         const d = Math.hypot(dx, dy) || 1;
-        if (d > 90) { s.player.x = b.x - dx / d * 80; s.player.y = b.y - dy / d * 80; }
+        if (d > 72) { s.player.x = b.x - dx / d * 64; s.player.y = b.y - dy / d * 64; }
         if (b.state === 'telegraph') info.telegraphsSeen++;
-        if (b.hitRequest) info.hitsRequested++;
+
         if (b.state === "telegraph" && b.currentAttack && !info.attacksUsed.includes(b.currentAttack.id)) info.attacksUsed.push(b.currentAttack.id);
         // Damage through the real path so the death and phase logic runs.
         b.takeDamage({ amount: chunk, source: 'weapon', fromX: s.player.x, fromY: s.player.y, poise: 0 });
         if (!b.alive) { info.defeated = true; info.finalPhase = b.phaseIndex; break; }
       }
       if (s.boss && !info.defeated) info.finalPhase = s.boss.phaseIndex;
+      info.hitsRequested = s.bossHitsResolved;
+      info.damageTaken = Math.round(s.bossDamageTaken);
       return info;
     });
 
     if (result.error) { row.note = result.error; }
     else {
       const expectedPhases = result.phases - 1;
-      row.ok = result.defeated && result.phasesEntered.length >= expectedPhases && result.telegraphsSeen > 0;
+      row.ok = result.defeated
+        && result.phasesEntered.length >= expectedPhases
+        && result.telegraphsSeen > 0
+        && result.hitsRequested > 0
+        && result.damageTaken > 0;
       row.note = `${result.id} arena=${result.arena} hp=${result.maxHealth} phases=${result.phases}/${result.phasesEntered.length + 1}`
         + ` attacks=${result.attacksUsed.length}/${result.attacks} telegraphs=${result.telegraphsSeen}`
-        + ` hits=${result.hitsRequested} defeated=${result.defeated}`;
+        + ` hits=${result.hitsRequested} dmg=${result.damageTaken} defeated=${result.defeated}`;
     }
     if (stage === 1 || stage % 10 === 0 || stage === 25) {
       try {

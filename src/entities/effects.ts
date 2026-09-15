@@ -29,17 +29,29 @@ export class EffectPool {
 
   private obtain(): Phaser.GameObjects.Sprite | null {
     if (this.live.length >= this.budget) return null;
-    const s = this.pool.pop() ?? this.scene.add.sprite(0, 0, 'vfx');
+    // Skip anything that was destroyed while it sat in the pool.
+    let s = this.pool.pop();
+    while (s && !s.scene) s = this.pool.pop();
+    if (!s) s = this.scene.add.sprite(0, 0, 'vfx');
     s.setActive(true).setVisible(true).setAlpha(1).setScale(1).setAngle(0);
+    s.clearTint();
     this.live.push(s);
     return s;
   }
 
+  /** Give a borrowed sprite back early; callers must never destroy one. */
+  cancel(s: Phaser.GameObjects.Sprite | null): void {
+    if (!s) return;
+    this.release(s);
+  }
+
   private release(s: Phaser.GameObjects.Sprite): void {
-    s.setActive(false).setVisible(false);
     const i = this.live.indexOf(s);
     if (i >= 0) this.live.splice(i, 1);
-    if (this.pool.length < 120) this.pool.push(s);
+    if (!s.scene) return; // already destroyed elsewhere
+    s.setActive(false).setVisible(false);
+    s.anims?.stop();
+    if (this.pool.length < 120 && !this.pool.includes(s)) this.pool.push(s);
     else s.destroy();
   }
 

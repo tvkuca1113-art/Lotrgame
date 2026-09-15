@@ -13,10 +13,11 @@ import { deriveStats, weaponFamilyOf } from '@/systems/progression';
 import { supportBonuses } from '@/systems/rings';
 import { equipmentById } from '@/content/equipment';
 import { playerSheet, buildingsKey, buildingMeta, registerAnimations, loadBundle, gearBundle } from '@/systems/assets';
-import { RESIDENTS, buildingById, HOME_TIERS } from '@/content/buildings';
+import { RESIDENTS, buildingById, HOME_TIERS, DEFENCE_CHALLENGE } from '@/content/buildings';
 import { homeEffects } from '@/systems/rings';
 import { nextHomeTier, suggestImprovements, validatePlacement, placeBuilding, moveBuilding, removeBuilding, BuildHistory, plotSize, footprintOf } from '@/systems/building';
 import { advanceDay, calendarView, seasonProfile, SEASON_LABEL } from '@/systems/seasons';
+import { campaignComplete } from '@/systems/campaign';
 import { Button, HEX, FONT_BODY, FONT_TITLE, Toaster, PALETTE, bodyText } from '@/ui/kit';
 import { play } from '@/audio/library';
 import { music, ambience } from '@/audio/music';
@@ -199,6 +200,13 @@ export class HomeScene extends Phaser.Scene {
       new Button(this, 0, 0, t('home.rest'), () => this.rest(), { width: 150, icon: 'home' }),
       new Button(this, 0, 0, t('action.pause'), () => this.openMenu('pause'), { width: 56, height: 48, icon: 'pause' }),
     ];
+    // The replay hub appears once there is replay content to reach.
+    if (campaignComplete(getState()) || getState().campaign.cleared.length >= DEFENCE_CHALLENGE.unlockStage) {
+      this.buttons.splice(2, 0, new Button(this, 0, 0, t('replay.title'), () => {
+        play('ui_confirm');
+        this.scene.start('Challenge', {});
+      }, { width: 150, icon: 'star' }));
+    }
     for (const b of this.buttons) b.setDepth(DEPTH.hud).container.setScrollFactor(0);
     this.updateGoals();
     this.layout();

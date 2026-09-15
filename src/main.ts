@@ -8,6 +8,7 @@ import { UIScene } from './scenes/UIScene';
 import { MenuScene } from './scenes/MenuScene';
 import { ResultScene } from './scenes/ResultScene';
 import { EndingScene } from './scenes/EndingScene';
+import { ChallengeScene } from './scenes/ChallengeScene';
 import { audio } from './audio/engine';
 import { getState } from './systems/state';
 import { saveGame } from './systems/save';
@@ -49,7 +50,7 @@ const config: Phaser.Types.Core.GameConfig = {
     activePointers: 4,
     touch: { capture: true },
   },
-  scene: [BootScene, TitleScene, MapScene, HomeScene, StageScene, UIScene, MenuScene, ResultScene, EndingScene],
+  scene: [BootScene, TitleScene, MapScene, HomeScene, StageScene, UIScene, MenuScene, ResultScene, EndingScene, ChallengeScene],
 };
 
 const game = new Phaser.Game(config);

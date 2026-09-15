@@ -101,6 +101,11 @@ movement direction, so no pointer is needed.
    level, the current season, the seasonal route, the boss, and the exact
    rewards before you commit.
 2. Explore the stage, fight through the encounters and finish the objective.
+   Objectives are rescues, collections, demolitions, lightings, sabotage and one
+   **escort**: a cart that only rolls while you walk beside it. Raiders can break
+   it, and breaking it never ends the run - it stops where it stands, patches
+   itself up after a few seconds, and every safe stop already reached stays
+   reached.
 3. Step into the boss arena. A **checkpoint sits immediately before every boss**.
 4. Beat the boss, collect the reward, and return home.
 5. Improve a ring, a piece of equipment or a building, then leave again with a
@@ -197,12 +202,26 @@ it at any time and keep all progress.
 
 ## Replay
 
-After the campaign the level cap stays at 30. What opens up:
+After the campaign the level cap stays at 30. Reach it all from **Challenges**,
+the button that appears in the settlement once there is replay content to open
+(the settlement defence at twenty stages cleared, the rest at the end of the
+campaign):
 
-- A **boss challenge board** and harder replays of existing stages
-- **The Six** - a gauntlet of all six chapter bosses with checkpoints between
-- Collection goals, personal bests, earned banners and cloak colours
-- An exportable image of your stronghold
+- A **boss challenge board** - fight any boss you have beaten again, on its own,
+  starting at the arena door. First clear pays full; repeats pay 35%.
+- **Hardened replays** - the whole stage with enemies scaled six stages up and
+  the boss at 150% health.
+- **The Six** - all six chapter bosses back to back. Health and flask charges
+  carry between fights; the total time is your personal best.
+- **Settlement defence** - eight waves at home, started deliberately from the
+  board. It can only be lost, never lost *from*: no structure is damaged and no
+  resource is taken if the raid breaks through.
+- Collection goals, personal bests, earned banners and cloak colours.
+- An exportable PNG of your stronghold and loadout, drawn from your own save on
+  a local canvas and never uploaded anywhere.
+
+No challenge grants experience or marks a campaign stage cleared, so none of it
+can be used to skip the campaign or push past level 30.
 
 No energy timers, no paid random rewards, no login streaks, no expiring progress.
 

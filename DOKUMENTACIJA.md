@@ -115,7 +115,11 @@ uopšte nije potreban.
 
 1. Na mapi kampanje biraš misiju. Prije polaska vidiš: cilj, preporučeni nivo,
    trenutno godišnje doba, sezonsku prečicu, bosa i **tačne nagrade**.
-2. Istražuješ nivo, boriš se i ispunjavaš zadatak.
+2. Istražuješ nivo, boriš se i ispunjavaš zadatak. Zadaci su spašavanje,
+   sakupljanje, rušenje, paljenje, sabotaža i jedna **pratnja**: kola koja se
+   kreću samo dok hodaš uz njih. Napadači ih mogu polomiti, ali to nikada ne
+   prekida misiju — kola stanu gdje jesu, sama se poprave nakon nekoliko
+   sekundi, a sve sigurne stanice do kojih si već stigao ostaju osvojene.
 3. Ulaziš u arenu bosa. **Tačka spašavanja (checkpoint) je neposredno prije
    svakog bosa.**
 4. Pobjeđuješ bosa, uzimaš nagradu i vraćaš se kući.
@@ -185,6 +189,31 @@ Tri prstena daju i **„vid prstena“** na određenim ruševinama: Ember otkriv
 tragove toplote, Dawnward natpise, Frostwake zaleđeni prelaz. To otvara samo
 **neobavezne** prečice, skrivene zalihe i priče — **obavezni put uvijek ima
 običan prolaz**.
+
+---
+
+## 6b. Izazovi (sadržaj nakon kampanje)
+
+Maksimalni nivo ostaje 30 i nakon kraja priče. U naselju se pojavi dugme
+**Challenges** kada ima šta da se otvori (odbrana naselja nakon 20 pređenih
+nivoa, ostalo nakon završetka kampanje):
+
+- **Tabla bosova** — ponovo se boriš protiv bilo kojeg bosa kojeg si već
+  pobijedio, samo protiv njega, počinješ odmah pred arenom. Prvi put plaća punu
+  nagradu, ponavljanje 35%.
+- **Otežana ponavljanja** — cijeli nivo s protivnicima jačim za šest nivoa i
+  bosom na 150% zdravlja.
+- **Šestorica** — svih šest bosova poglavlja jedan za drugim. Zdravlje i napici
+  se prenose iz borbe u borbu, a ukupno vrijeme je tvoj lični rekord.
+- **Odbrana naselja** — osam talasa kod kuće, pokreće se svjesno s table. Može
+  se izgubiti, ali se time ništa ne gubi: nijedna zgrada se ne ošteti i nijedan
+  resurs se ne oduzme ako te probiju.
+- Ciljevi sakupljanja, lični rekordi, zastave i boje plašta.
+- **Slika tvrđave** — PNG tvog naselja i opreme, nacrtan iz tvoje snimljene igre
+  lokalno u pregledniku. Ništa se nigdje ne šalje.
+
+Nijedan izazov ne daje iskustvo niti označava nivo kampanje kao pređen, pa se
+njima ne može preskočiti kampanja niti prijeći nivo 30.
 
 ---
 
