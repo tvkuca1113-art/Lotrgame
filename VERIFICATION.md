@@ -80,8 +80,8 @@ every `npm test`.
 | Boot to title screen | **pass** |
 | Canvas fills the viewport | **pass** |
 | New Game → control on the ruined road | **pass — 1.8 s** (budget: 15 s) |
-| Player moves | **pass** — 34 world px in 0.9 s of input |
-| **Move and attack at the same time** | **pass** — moved 9 px while the swing was in its active frames |
+| Player moves, and the world scrolls with them | **pass** — 165 world px in 0.9 s of input, camera scrolled 49 px |
+| **Move and attack at the same time** | **pass** — moved 85 px while the swing was in its active frames |
 | Dodge costs stamina | **pass** — 25 stamina, as specified |
 | Ring cast starts a cooldown | **pass** — Ember, 8.0 s |
 | Flask heals and decrements | **pass** — 3→2 charges, health 10→52 |
@@ -99,7 +99,55 @@ every `npm test`.
 the boss door, fights the boss through its phases with real damage, and confirms
 the defeat path. Full output: `qa-shots/bosswalk-report.txt`.
 
-<!--BOSSWALK-->
+**30/30 arenas verified**, console errors and failed requests: **0**.
+
+Each line is one arena: the boss that spawned, its health, phases entered
+out of phases defined, distinct attacks seen, telegraphs counted, hits the
+boss landed on the player and damage it dealt. The player is **not** made
+invulnerable, so a run only passes if the boss actually connected.
+
+```
+# Stages 1-21 and 24-30 are from one uninterrupted run of the full walk.
+# Stages 22 and 23 are from a re-run of those two stages immediately after,
+# on the same build plus one fix: their bosses damage the player through
+# ground hazards, and the diagnostic counter was not watching that path, so
+# the first run recorded dmg=0 and failed working code. Both bosses reached
+# defeated=true in both runs.
+
+PASS  stage  1  boss_gritch arena=road_toll hp=320 phases=1/1 attacks=3/3 telegraphs=41 hits=7 dmg=104 defeated=true
+PASS  stage  2  boss_kruk arena=mill_yard hp=454 phases=1/1 attacks=1/3 telegraphs=39 hits=9 dmg=108 defeated=true
+PASS  stage  3  boss_bellwight arena=barrow_ring hp=618 phases=2/2 attacks=3/3 telegraphs=137 hits=18 dmg=84 defeated=true
+PASS  stage  4  boss_greyfang arena=wolf_pass hp=759 phases=1/1 attacks=1/3 telegraphs=65 hits=17 dmg=238 defeated=true
+PASS  stage  5  boss_mogrun arena=rootbound_pillars hp=1329 phases=2/2 attacks=3/4 telegraphs=181 hits=25 dmg=457 defeated=true
+PASS  stage  6  boss_ssilka arena=web_hollow hp=1091 phases=2/2 attacks=2/4 telegraphs=120 hits=20 dmg=2086 defeated=true
+PASS  stage  7  boss_briararcher arena=waystation hp=1183 phases=1/1 attacks=1/3 telegraphs=50 hits=13 dmg=182 defeated=true
+PASS  stage  8  boss_norgath arena=mire_shrine hp=1412 phases=2/2 attacks=3/3 telegraphs=194 hits=21 dmg=602 defeated=true
+PASS  stage  9  boss_hushcaller arena=grove_wards hp=1507 phases=2/2 attacks=2/3 telegraphs=92 hits=7 dmg=98 defeated=true
+PASS  stage 10  boss_ashweb_queen arena=ashweb_throne hp=2447 phases=2/2 attacks=3/5 telegraphs=139 hits=11 dmg=1858 defeated=true
+PASS  stage 11  boss_rockjaw arena=quarry_floor hp=1897 phases=2/2 attacks=3/3 telegraphs=172 hits=31 dmg=899 defeated=true
+PASS  stage 12  boss_bragg arena=furnace_hall hp=2014 phases=2/2 attacks=4/4 telegraphs=179 hits=16 dmg=458 defeated=true
+PASS  stage 13  boss_whitefang arena=ice_bridge hp=2203 phases=2/2 attacks=2/4 telegraphs=115 hits=23 dmg=577 defeated=true
+PASS  stage 14  boss_ironecho arena=anvil_hall hp=2398 phases=2/2 attacks=3/4 telegraphs=142 hits=34 dmg=495 defeated=true
+PASS  stage 15  boss_durnok arena=chained_deep hp=3567 phases=2/2 attacks=3/4 telegraphs=164 hits=21 dmg=540 defeated=true
+PASS  stage 16  boss_karg arena=flooded_ford hp=2756 phases=2/2 attacks=4/4 telegraphs=133 hits=25 dmg=2006 defeated=true
+PASS  stage 17  boss_uzg arena=siegeworks hp=2866 phases=2/2 attacks=2/4 telegraphs=82 hits=15 dmg=425 defeated=true
+PASS  stage 18  boss_wardrummer arena=bannerfield hp=3126 phases=2/2 attacks=4/4 telegraphs=180 hits=22 dmg=5686 defeated=true
+PASS  stage 19  boss_cinderknight arena=ember_watch hp=3287 phases=2/2 attacks=3/4 telegraphs=117 hits=20 dmg=930 defeated=true
+PASS  stage 20  boss_varzug arena=red_banner_keep hp=4885 phases=3/3 attacks=4/5 telegraphs=149 hits=22 dmg=2565 defeated=true
+PASS  stage 21  boss_glasswight arena=mirror_barrows hp=3610 phases=2/2 attacks=4/4 telegraphs=139 hits=19 dmg=4283 defeated=true
+PASS  stage 22  boss_riftkeeper arena=obsidian_pass hp=3834 phases=2/2 attacks=2/3 telegraphs=105 hits=2 dmg=323 defeated=true
+PASS  stage 23  boss_paleflame arena=winter_tower hp=4063 phases=2/2 attacks=2/3 telegraphs=104 hits=4 dmg=672 defeated=true
+PASS  stage 24  boss_oathbreaker arena=fallen_courtyard hp=4435 phases=2/2 attacks=4/4 telegraphs=151 hits=22 dmg=812 defeated=true
+PASS  stage 25  boss_nameless_nazgul arena=black_causeway hp=6205 phases=2/2 attacks=4/5 telegraphs=131 hits=19 dmg=702 defeated=true
+PASS  stage 26  boss_gruk arena=siege_trench hp=4637 phases=2/2 attacks=3/4 telegraphs=136 hits=13 dmg=420 defeated=true
+PASS  stage 27  boss_cindermaw arena=smouldering_forge hp=4959 phases=2/2 attacks=3/4 telegraphs=109 hits=17 dmg=816 defeated=true
+PASS  stage 28  boss_castellan arena=broken_citadel hp=5212 phases=2/2 attacks=4/5 telegraphs=148 hits=24 dmg=1150 defeated=true
+PASS  stage 29  boss_oaththief arena=last_beacon hp=5471 phases=2/2 attacks=5/5 telegraphs=134 hits=23 dmg=1010 defeated=true
+PASS  stage 30  boss_ashen_regent arena=eclipse_summit hp=7803 phases=3/3 attacks=6/6 telegraphs=131 hits=17 dmg=949 defeated=true
+
+30/30 boss arenas verified
+console errors / failed requests: 0
+```
 
 ---
 
@@ -107,7 +155,92 @@ the defeat path. Full output: `qa-shots/bosswalk-report.txt`.
 
 `node tools/qa/systems.mjs`. Full output: `qa-shots/desktop-systems-report.txt`.
 
-<!--SYSTEMS-->
+Desktop: **16 passed, 0 failed**, console errors: **0**.
+Emulated Pixel 5: **16 passed, 0 failed**, console errors: **0**.
+
+```
+PASS  a full stage can be finished and pays out once
+      first clear 1882 gold, replay +708 (38%)
+PASS  stages can be entered, left and re-entered without breaking
+      visit 1: stage 4, 13 enemies, HUD live
+      visit 2: stage 12, 22 enemies, HUD live
+      visit 3: stage 4, 13 enemies, HUD live
+PASS  the settlement loads and can be walked
+      walked 176 world px
+PASS  a building can be placed, moved and dismantled for a full refund
+      placed for 25 gold, moved for 0, 0 left
+PASS  both settlement ring sockets accept and release a ring
+      equipped -> slot:active1, then socketed -> socket:0 (active1 now null), socket0=ember socket1=null
+PASS  resting advances a day and the season turns after four
+      autumn:1 -> autumn:2 -> autumn:3 -> winter:0
+PASS  a seasonal route opens only in its own season
+      spring=closed  summer=closed  autumn=closed  winter=open
+PASS  death and retry keeps loot and does not duplicate rewards
+      cache paid 116 gold once; after retry still 116, health 388, flask 3
+PASS  a full inventory sends rewards to the stash instead of losing them
+      overflow held 1 item in the stash, then reclaimed into the bag (sword_valley, bow_hunting)
+PASS  the ending scene offers both choices and each writes an epilogue
+      spread -> spread/valley-light/epilogue shown
+      concentrate -> concentrate/valley-light,hearth-light/epilogue shown
+PASS  the settlement offers the challenge hub only once there is one
+      3 stages cleared -> Build, The Northern Valley, Rest until morning, Pause
+      campaign finished -> Build, The Northern Valley, Challenges, Rest until morning, Pause
+PASS  the challenge hub opens and every tab renders
+      board=11 objects  hard=11 objects  gauntlet=17 objects  collection=11 objects  stronghold=12 objects
+PASS  the stronghold card renders from the save
+      900x560, 1338 lit samples
+PASS  a boss challenge pays out without touching campaign progress
+      opened at the boss door=true, +110 gold, best=23133ms, scenes=Result
+PASS  the settlement defence runs its waves and never risks the settlement
+      waves 1,2,3 on the settlement map, up to 7 raiders at once, buildings unchanged (0)
+PASS  the escort cart rolls with the player and survives being broken
+      idle 0px, escorted 1063px, 1 stop(s) reached and kept, repaired to 418 hp
+
+console errors: 0
+```
+
+### The same checks on an emulated phone
+
+```
+PASS  a full stage can be finished and pays out once
+      first clear 1882 gold, replay +708 (38%)
+PASS  stages can be entered, left and re-entered without breaking
+      visit 1: stage 4, 13 enemies, HUD live
+      visit 2: stage 12, 22 enemies, HUD live
+      visit 3: stage 4, 13 enemies, HUD live
+PASS  the settlement loads and can be walked
+      walked 135 world px
+PASS  a building can be placed, moved and dismantled for a full refund
+      placed for 25 gold, moved for 0, 0 left
+PASS  both settlement ring sockets accept and release a ring
+      equipped -> slot:active1, then socketed -> socket:0 (active1 now null), socket0=ember socket1=null
+PASS  resting advances a day and the season turns after four
+      autumn:1 -> autumn:2 -> autumn:3 -> winter:0
+PASS  a seasonal route opens only in its own season
+      spring=closed  summer=closed  autumn=closed  winter=open
+PASS  death and retry keeps loot and does not duplicate rewards
+      cache paid 116 gold once; after retry still 116, health 388, flask 3
+PASS  a full inventory sends rewards to the stash instead of losing them
+      overflow held 1 item in the stash, then reclaimed into the bag (sword_valley, bow_hunting)
+PASS  the ending scene offers both choices and each writes an epilogue
+      spread -> spread/valley-light/epilogue shown
+      concentrate -> concentrate/valley-light,hearth-light/epilogue shown
+PASS  the settlement offers the challenge hub only once there is one
+      3 stages cleared -> Build, The Northern Valley, Rest until morning, Pause
+      campaign finished -> Build, The Northern Valley, Challenges, Rest until morning, Pause
+PASS  the challenge hub opens and every tab renders
+      board=11 objects  hard=11 objects  gauntlet=17 objects  collection=11 objects  stronghold=12 objects
+PASS  the stronghold card renders from the save
+      900x560, 1342 lit samples
+PASS  a boss challenge pays out without touching campaign progress
+      opened at the boss door=true, +110 gold, best=5250ms, scenes=Result
+PASS  the settlement defence runs its waves and never risks the settlement
+      waves 1,2,3 on the settlement map, up to 7 raiders at once, buildings unchanged (0)
+PASS  the escort cart rolls with the player and survives being broken
+      idle 0px, escorted 1078px, 1 stop(s) reached and kept, repaired to 418 hp
+
+console errors: 0
+```
 
 ---
 
@@ -116,7 +249,32 @@ the defeat path. Full output: `qa-shots/bosswalk-report.txt`.
 `node tools/qa/smoke.mjs --mobile` — **emulated** Pixel 5 (393×851, touch, 3×
 DPR) in the same Chromium.
 
-<!--MOBILE-->
+**10 passed, 0 failed**, console errors: **0**.
+
+```
+PASS  boot completes and the title screen appears
+PASS  canvas is present and sized to the viewport
+      time to control: 1.1s
+      active scenes: Stage, UI
+PASS  New Game gives control on the ruined road within 15 seconds
+      right 179px
+      best 179 world px, net 179 px, camera scrolled 73 px
+PASS  player moves with keyboard/touch and the world scrolls
+      attacked while moving 54px, phase=move
+PASS  simultaneous movement and attack
+      19.9 FPS (mobile, software GL)
+PASS  measure frame rate over 5 seconds
+      dodge cost 25, ring cd 8.0s, flask 1, healed to 52
+PASS  ring cast, dodge and flask all respond
+      gold after reload: 4321
+PASS  save and reload restores the campaign
+      resumed into: Stage, UI
+PASS  Continue resumes the campaign from the saved checkpoint
+PASS  pause menu opens and closes without errors
+
+console errors: 0
+failed requests: 0
+```
 
 > **Emulation, not a physical phone.** These runs use Chromium's device
 > emulation: a real viewport, a real touch input pipeline and real touch events,
@@ -131,7 +289,8 @@ DPR) in the same Chromium.
 
 | Measurement | Value |
 |---|---|
-| Frame rate, desktop viewport (1024×640), software SwiftShader | **12–13 FPS** |
+| Frame rate, desktop viewport (1024×640), software SwiftShader | **7.1 FPS** |
+| Frame rate, emulated Pixel 5, software SwiftShader | **19.9 FPS** |
 
 **This number is not a valid desktop measurement.** This container has no GPU,
 so Chromium rasterises every frame on the CPU. The figure tells you the build
@@ -203,7 +362,51 @@ are all data in `src/content`, so they can be tuned without touching code.
 
 ---
 
-## 9. Known limitations
+## 9. What this verification round found
+
+Fourteen defects were found and fixed while producing the results above: ten in
+the game and four in the verification harness itself. They are listed because
+the pattern matters more than the count.
+
+**In the game**
+
+| Defect | What a player would have seen |
+|---|---|
+| `cleanup()` cleared Phaser's own plugin listeners off the scene emitter | The second mission of any session was a dead scene |
+| The fixed step was fed the engine's smoothed frame delta | The game ran at 5 % speed on slow hardware |
+| The HUD scene was never laid out after building its touch controls | The virtual stick's hit area stayed 10×10 px — unplayable by touch on first load |
+| `update()` ran during the async `create()` | The scene used the previous run's destroyed player and map |
+| The per-frame step cap disagreed with the frame clamp | Time was dropped even when the clamp allowed catch-up |
+| The run clock used the same smoothed delta | Personal bests recorded a fraction of the real duration |
+| The HUD removed 1 of the 14 listeners it put on the stage's emitter | A stopped HUD threw inside the next stage's `create()` |
+| `EndingScene.chosen` and `TitleScene.started` were never reset | A second playthrough's ending choice was ignored |
+| The pause menu removed *every* listener for the resize event | After one pause, the HUD stopped relaying out on resize |
+| Three nine-slice frames were not in the atlas | Nine page errors, one per challenge-hub row |
+
+Six of the ten are the same misunderstanding in different clothes: **Phaser
+reuses scene instances, and its event emitters outlive the scenes that
+subscribe to them.** None of them are visible in a single mission on fast
+hardware, which is exactly why they survived until the suite covered leaving a
+stage and coming back.
+
+**In the harness** — recorded separately because each would have produced a
+confident result backed by nothing:
+
+- two dead dynamic imports whose 404s were counted as the game's console errors;
+- a leftover process holding the test port, so two runs produced empty logs
+  while the pass looked like it had run;
+- per-frame damage that rounded to zero for the lowest-health boss, so the test
+  could not kill a boss the game kills fine;
+- `bossDamageTaken` not counting ground-hazard damage, so two hazard-based
+  bosses reported zero damage and failed working code.
+
+The first boss walk of the day reported **30/30 arenas green while the game was
+unplayable past the first mission**. That is the cautionary result of this
+round: a suite that only ever starts fresh proves only that the game starts.
+
+---
+
+## 10. Known limitations
 
 1. **No real-hardware performance data.** See section 7.
 2. **No human playtest.** See section 8.
@@ -215,13 +418,18 @@ are all data in `src/content`, so they can be tuned without touching code.
    sectors, alternating fissures, redirecting a ballista bolt, the Iron Echo's
    delayed repeat — are functional but would benefit from a tuning pass with a
    player in the chair.
-5. **Escort missions** move between safe stops and are recoverable after
-   failure, but the escorted cart follows a simple path rather than a full
-   pathfinding agent.
-6. **The settlement defence challenge** is implemented as an optional,
-   manually-started wave mode with capped waves and cosmetic rewards. It is the
-   least exercised system in this release.
-7. **One locale.** All text is in English, keyed in `src/content/locale`. The
+5. **The escort cart** steers around obstacles by wall-following rather than
+   by a full pathfinding agent. It is verified to travel over 1000 px while
+   escorted, to stay put when abandoned, and to keep its stops after being
+   broken and repaired, but a deliberately maze-like arena could still stall
+   it longer than a pathfinder would.
+6. **The settlement defence** is verified for its first three waves in both
+   profiles - raiders spawn, the settlement is never damaged, and the run pays
+   out - but no run has played all eight waves through to the reward.
+7. **Ring synergies and talent interactions** are covered by unit tests rather
+   than by play. The rules are enforced and non-recursion is proven, but
+   whether a given pairing is *satisfying* is unvalidated.
+8. **One locale.** All text is in English, keyed in `src/content/locale`. The
    dictionary is complete and translation-ready; no second language ships.
-8. **Audio is synthesised, not composed.** It is original and it works, but a
+9. **Audio is synthesised, not composed.** It is original and it works, but a
    generative bed is not the same thing as a written score.
