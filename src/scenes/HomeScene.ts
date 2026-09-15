@@ -108,8 +108,8 @@ export class HomeScene extends Phaser.Scene {
     ambience.play(this.season);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
-    this.events.on(Phaser.Scenes.Events.WAKE, () => this.onWake());
-    this.events.on(Phaser.Scenes.Events.RESUME, () => this.onWake());
+    this.events.on(Phaser.Scenes.Events.WAKE, this.onWake, this);
+    this.events.on(Phaser.Scenes.Events.RESUME, this.onWake, this);
     this.ready = true;
     void saveGame(state);
   }
@@ -638,7 +638,14 @@ export class HomeScene extends Phaser.Scene {
     this.buildingSprites.clear();
     for (const r of this.residentSprites) r.sprite.destroy();
     this.residentSprites = [];
-    this.events.removeAllListeners();
+    // Remove only the events this scene added. Phaser's own plugins - input,
+    // tweens, time, the scene systems themselves - subscribe to this same
+    // emitter, so removeAllListeners() would tear them off and the scene could
+    // never be started again.
+    // Removed by reference: WAKE and RESUME are Phaser's own events and other
+    // plugins listen to them too.
+    this.events.off(Phaser.Scenes.Events.WAKE, this.onWake, this);
+    this.events.off(Phaser.Scenes.Events.RESUME, this.onWake, this);
   }
 
   init(): void {

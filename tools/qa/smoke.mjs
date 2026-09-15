@@ -59,7 +59,10 @@ const log = [];
 const errors = [];
 const missing = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+// Keep the top frames: the message alone does not say which scene threw.
+page.on('pageerror', (e) => errors.push(
+  `pageerror: ${e.message}\n    ${(e.stack ?? '').split('\n').slice(1, 5).map((l) => l.trim()).join('\n    ')}`,
+));
 page.on('response', (r) => { if (r.status() >= 400) missing.push(`${r.status()} ${r.url()}`); });
 
 const step = async (name, fn) => {
@@ -121,31 +124,68 @@ await step('New Game gives control on the ruined road within 15 seconds', async 
 });
 await shot(`${profile}-2-stage.png`);
 
+/** Real touch input: Playwright's touchscreen only taps, so drags go via CDP. */
+const cdp = await context.newCDPSession(page);
+const touch = async (type, x, y) => {
+  await cdp.send('Input.dispatchTouchEvent', {
+    type,
+    touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1, radiusX: 12, radiusY: 12, force: 1 }],
+  });
+};
+
+const playerAt = () => page.evaluate(() => {
+  const s = window.__hearth?.scene('Stage');
+  return s && s.player ? { x: s.player.x, y: s.player.y } : null;
+});
+
 await step('player moves with keyboard/touch and the world scrolls', async () => {
-  const before = await page.evaluate(() => {
-    const s = window.__hearth?.game?.scene.getScene('Stage');
-    return s ? { x: s.player.x, y: s.player.y } : null;
+  const start = await playerAt();
+  if (!start) throw new Error('stage scene has no player');
+  const camBefore = await page.evaluate(() => {
+    const c = window.__hearth.scene('Stage').cameras.main;
+    return { x: c.scrollX, y: c.scrollY };
   });
-  if (!before) throw new Error('stage scene has no player');
+
+  // Scenery can stand in any one direction, so a single key is not a fair
+  // test of whether movement works. Try each in turn and keep the best.
+  const tries = [];
   if (profile === 'mobile') {
-    await page.touchscreen.tap(centre.w * 0.2, centre.h * 0.72);
-    await page.mouse.move(centre.w * 0.2, centre.h * 0.72);
-    await page.mouse.down();
-    await page.mouse.move(centre.w * 0.32, centre.h * 0.62, { steps: 8 });
-    await page.waitForTimeout(1200);
-    await page.mouse.up();
+    const ox = centre.w * 0.2, oy = centre.h * 0.72;
+    for (const [dx, dy, name] of [[90, 0, 'right'], [-90, 0, 'left'], [0, -90, 'up'], [0, 90, 'down']]) {
+      const before = await playerAt();
+      await touch('touchStart', ox, oy);
+      await touch('touchMove', ox + dx, oy + dy);
+      await page.waitForTimeout(900);
+      await touch('touchEnd', ox + dx, oy + dy);
+      await page.waitForTimeout(150);
+      const after = await playerAt();
+      tries.push({ name, moved: Math.hypot(after.x - before.x, after.y - before.y) });
+      if (tries.at(-1).moved >= 30) break;
+    }
   } else {
-    await page.keyboard.down('KeyD');
-    await page.waitForTimeout(900);
-    await page.keyboard.up('KeyD');
+    for (const [key, name] of [['KeyD', 'right'], ['KeyA', 'left'], ['KeyW', 'up'], ['KeyS', 'down']]) {
+      const before = await playerAt();
+      await page.keyboard.down(key);
+      await page.waitForTimeout(900);
+      await page.keyboard.up(key);
+      await page.waitForTimeout(150);
+      const after = await playerAt();
+      tries.push({ name, moved: Math.hypot(after.x - before.x, after.y - before.y) });
+      if (tries.at(-1).moved >= 30) break;
+    }
   }
-  const after = await page.evaluate(() => {
-    const s = window.__hearth?.game?.scene.getScene('Stage');
-    return { x: s.player.x, y: s.player.y };
+  const best = tries.reduce((a, b) => (b.moved > a.moved ? b : a));
+  const end = await playerAt();
+  const camAfter = await page.evaluate(() => {
+    const c = window.__hearth.scene('Stage').cameras.main;
+    return { x: c.scrollX, y: c.scrollY };
   });
-  const moved = Math.hypot(after.x - before.x, after.y - before.y);
-  log.push(`      moved ${moved.toFixed(0)} world px`);
-  if (moved < 20) throw new Error(`player did not move (${moved.toFixed(1)}px)`);
+  const camMoved = Math.hypot(camAfter.x - camBefore.x, camAfter.y - camBefore.y);
+  const total = Math.hypot(end.x - start.x, end.y - start.y);
+  log.push(`      ${tries.map((t) => `${t.name} ${t.moved.toFixed(0)}px`).join(', ')}`);
+  log.push(`      best ${best.moved.toFixed(0)} world px, net ${total.toFixed(0)} px, camera scrolled ${camMoved.toFixed(0)} px`);
+  if (best.moved < 20) throw new Error(`player did not move in any direction (best ${best.moved.toFixed(1)}px)`);
+  if (camMoved < 5) throw new Error(`the world did not scroll with the player (${camMoved.toFixed(1)}px)`);
 });
 
 await step('simultaneous movement and attack', async () => {

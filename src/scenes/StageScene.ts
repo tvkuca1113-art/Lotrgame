@@ -1595,6 +1595,10 @@ export class StageScene extends Phaser.Scene {
     this.cart?.destroy();
     this.cart = null;
     this.world?.destroy();
-    this.events.removeAllListeners();
+    // Remove only the events this scene added. Phaser's own plugins - input,
+    // tweens, time, the scene systems themselves - subscribe to this same
+    // emitter, so removeAllListeners() would tear them off and the scene could
+    // never be started again.
+    for (const e of ['ui:ring', 'ui:heal', 'ui:interact', 'ui:pause']) this.events.off(e);
   }
 }

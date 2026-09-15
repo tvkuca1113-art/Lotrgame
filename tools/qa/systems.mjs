@@ -42,7 +42,10 @@ page.setDefaultTimeout(45000);
 const log = [];
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+// Keep the top frames: the message alone does not say which scene threw.
+page.on('pageerror', (e) => errors.push(
+  `pageerror: ${e.message}\n    ${(e.stack ?? '').split('\n').slice(1, 5).map((l) => l.trim()).join('\n    ')}`,
+));
 page.on('response', (r) => { if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`); });
 
 const step = async (name, fn) => {
