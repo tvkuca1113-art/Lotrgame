@@ -38,7 +38,7 @@ node tools/qa/bosswalk.mjs 3,17    # or just the stages you name
 
 ## 2. Automated tests
 
-`npm test` — **164 tests across 12 files, all passing** (~3 s).
+`npm test` — **176 tests across 14 files, all passing** (~3 s).
 
 | File | Tests | Covers |
 |---|---|---|
@@ -54,6 +54,8 @@ node tools/qa/bosswalk.mjs 3,17    # or just the stages you name
 | `content.test.ts` | 6 | structural validation of the whole content layer, counts, the boss-per-stage rule, and **every `t('…')` key in the source being present in the dictionary** |
 | `replay.test.ts` | 15 | the challenge board's unlock rules, reduced repeat payouts, personal bests, **challenges never touching campaign progress or experience**, the six-boss gauntlet's ordering and timing, cloak unlocks and collection totals |
 | `escort.test.ts` | 10 | the cart's leash, wall-following round an obstacle, breaking, self-repair, patching at a stop, and restoration on a retry |
+| `fixedstep.test.ts` | 7 | **that a stretch of wall-clock time produces the same simulated time at 144, 60, 30, 12 and 7 FPS**, that a long stall is clamped rather than replayed, that catch-up is limited by the frame clamp rather than a lower step cap, and that a smoothed engine delta cannot slow the simulation down |
+| `atlas.test.ts` | 5 | every `frames`, `glyphs`, `rings` and `vfx` frame name in the source exists in the generated atlas |
 
 ### What the economy simulation found
 
@@ -136,11 +138,39 @@ so Chromium rasterises every frame on the CPU. The figure tells you the build
 runs and renders; it says nothing about the 60 FPS desktop target or the 30 FPS
 mobile floor.
 
+### What the frame-rate work found
+
+The claim that a fixed step makes game speed independent of frame rate was
+**false in the shipped build until this pass**, and the measurement is worth
+recording because it is not something the unit tests could have caught.
+
+`tools/qa/probe-delta.mjs` instruments the step accumulator in the production
+build and compares simulated time against the clock:
+
+| | before | after |
+|---|---|---|
+| Real frame interval | 314 ms | 284 ms |
+| Delta the step loop received | **16.7 ms** | 284 ms |
+| Simulated / elapsed | 133 ms / 2486 ms — **5 %** | 2233 ms / 2517 ms — **89 %** |
+| Player moved / expected | 25 px / 470 px | 422 px / 476 px |
+
+The cause was feeding the accumulator the frame delta the engine reports.
+Phaser smooths and clamps that towards the target frame time, so a slow frame
+still reports about 16.7 ms and the simulation quietly ran at a fraction of
+real speed. The step now derives its own delta from a monotonic clock.
+
+On the mobile profile (23 FPS, 42 ms frames — inside the clamp) the same probe
+reports **2083 ms simulated over 2072 ms elapsed and 394 px moved of 392
+expected**, so the pacing is exact whenever frames stay under the clamp.
+
+The residual 11 % on desktop is the deliberate 250 ms frame clamp doing its
+job at roughly 3 FPS: below that the game slows down rather than spiralling.
+
 What *can* be stated from this environment:
 
 - The simulation is on a **fixed 60 Hz step with clamped long frames**, so game
-  speed, damage, cooldowns and seasons are identical at 12 FPS and at 144 FPS.
-  The software-rendered runs above play correctly at 12 FPS.
+  speed, damage, cooldowns and seasons keep real-time pace at any frame rate
+  down to the 250 ms clamp — measured above, not merely designed for.
 - Ground is baked once into a batched render texture; only actors, props and
   effects are depth-sorted per frame.
 - Enemy counts are bounded, effects are pooled with a per-quality budget
