@@ -404,6 +404,39 @@ await shot(`${mobile ? 'mobile' : 'desktop'}-ending.png`);
 
 // ----------------------------------------------------------- replay content
 
+await step('the settlement offers the challenge hub only once there is one', async () => {
+  const res = await page.evaluate(async () => {
+    const g = window.__hearth.game;
+    const labelsOnHome = async () => {
+      for (const k of ['Stage', 'UI', 'Challenge', 'Result', 'Ending', 'Map']) g.scene.stop(k);
+      g.scene.start('Home', {});
+      await new Promise((r) => setTimeout(r, 1400));
+      const h = window.__hearth.scene('Home');
+      // Button labels live as Text inside each button container.
+      return (h?.buttons ?? []).map((b) => {
+        const t = b.container.list.find((c) => c.type === 'Text');
+        return t ? t.text : '';
+      });
+    };
+    const st = window.__hearth.getState();
+    // Early campaign: nothing to replay yet.
+    const clearedBefore = [...st.campaign.cleared];
+    const endingBefore = st.campaign.endingChosen;
+    st.campaign.cleared = [1, 2, 3];
+    st.campaign.endingChosen = null;
+    const early = await labelsOnHome();
+    // Campaign finished: the hub is reachable.
+    st.campaign.cleared = clearedBefore;
+    st.campaign.endingChosen = endingBefore;
+    const late = await labelsOnHome();
+    return { early, late };
+  });
+  const wanted = 'Challenges';
+  if (res.early.includes(wanted)) throw new Error(`the hub was offered after only three stages: ${res.early.join(', ')}`);
+  if (!res.late.includes(wanted)) throw new Error(`the hub was not offered after the campaign: ${res.late.join(', ')}`);
+  return `3 stages cleared -> ${res.early.filter(Boolean).join(', ')}\n      campaign finished -> ${res.late.filter(Boolean).join(', ')}`;
+});
+
 await step('the challenge hub opens and every tab renders', async () => {
   const res = await page.evaluate(async () => {
     const st = window.__hearth.getState();
