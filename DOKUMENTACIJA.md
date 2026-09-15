@@ -19,7 +19,7 @@ dokumenta, u poglavlju [Pravna napomena](#pravna-napomena).
 | Stavka | Stanje |
 |---|---|
 | Kompletan izvorni kod | ✅ `src/`, `tools/`, `tests/` |
-| Svi grafički materijali | ✅ 113 fajlova, generisani kodom iz `tools/art` |
+| Svi grafički materijali | ✅ 113 slika + 109 atlas opisa (222 fajla, 23 MB), generisani kodom iz `tools/art` |
 | Zvuk i muzika | ✅ sintetizuje se uživo (Web Audio), bez audio fajlova |
 | Produkcijski build | ✅ `dist/` — obična statička stranica |
 | ZIP paket | ✅ `dist-zip/the-last-hearth-*.zip` (19,4 MB) |
@@ -282,6 +282,16 @@ tests/       vitest testovi
 **Svaka slika u `public/assets` generisana je kodom iz `tools/art`.** Ništa nije
 preuzeto, precrtano ni uvezeno sa strane; sam generator je dokaz porijekla, a
 svaki PNG nosi svoju licencu upisanu u `tEXt` zapis.
+
+**Generator daje uvijek isti rezultat.** Kada se cijeli `public/assets` obriše i
+napravi ponovo od nule, svih 222 fajla ispadnu bajt po bajt identični onima koje
+projekat nosi — to je provjereno tako što je upravo to i urađeno, pa upoređeno.
+To znači da se grafika u bilo kojem trenutku može ponovo napraviti iz koda i
+uporediti s onim što je isporučeno.
+
+Build pamti „otisak“ generatora i preskače pravljenje grafike kada se ništa nije
+promijenilo, pa `npm run build` ne plaća tih dva i po minuta svaki put.
+Ako želiš ponovo napraviti grafiku bez obzira na to: `npm run assets -- --force`.
 
 Generator sadrži:
 

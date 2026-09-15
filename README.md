@@ -274,9 +274,21 @@ the pipeline *is* the provenance record, and each PNG carries its licence in a
 `tEXt` chunk.
 
 ```bash
-npm run assets            # regenerate everything (parallel, ~2-3 minutes)
+npm run assets            # rebuild if the generators changed (~2-3 minutes)
+npm run assets -- --force # rebuild regardless
 node --experimental-strip-types tools/build-assets.ts --only=ui
 ```
+
+The build fingerprints the generators and skips entirely when the manifest
+already matches them and every file it names is present, so an ordinary
+`npm run build` does not pay the two-and-a-half minutes.
+
+**The pipeline is deterministic.** Deleting `public/assets` and regenerating
+from scratch reproduces all 222 files (113 images and 109 atlas descriptions,
+23 MB) byte for byte - this was verified by
+doing exactly that and diffing against the committed set, where the only
+difference was the new fingerprint in the manifest. That means the artwork can
+be rebuilt from source at any time and checked against what ships.
 
 The pipeline contains:
 
