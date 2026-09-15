@@ -163,7 +163,7 @@ export class ChallengeScene extends Phaser.Scene {
   private entryRow(entry: ChallengeEntry, w: number, onStart: (e: ChallengeEntry) => void): Phaser.GameObjects.Container {
     const c = this.add.container(0, 0);
     const rowW = w - 56;
-    const bg = this.add.nineslice(0, 0, 'frames', entry.cleared ? 'slot_filled' : 'slot_empty', rowW, 56, 10, 10, 10, 10).setOrigin(0, 0);
+    const bg = this.add.rectangle(0, 0, rowW, 56, PALETTE.forest, entry.cleared ? 0.42 : 0.16).setOrigin(0, 0);
     const name = this.add.text(12, 8, `${entry.stage}. ${t(entry.nameKey)}`, {
       fontFamily: FONT_TITLE, fontSize: '15px', color: entry.unlocked ? HEX.parchment : HEX.muted,
     });
@@ -263,7 +263,7 @@ export class ChallengeScene extends Phaser.Scene {
     for (const g of collectionGoals(state)) {
       const c = this.add.container(0, 0);
       const done = g.have >= g.need;
-      const bg = this.add.nineslice(0, 0, 'frames', done ? 'slot_filled' : 'slot_empty', rowW, 40, 10, 10, 10, 10).setOrigin(0, 0);
+      const bg = this.add.rectangle(0, 0, rowW, 40, PALETTE.forest, done ? 0.42 : 0.16).setOrigin(0, 0);
       const label = this.add.text(12, 11, t(g.key), { fontFamily: FONT_BODY, fontSize: '13px', color: done ? HEX.good : HEX.parchment });
       const count = this.add.text(rowW - 14, 11, `${g.have} / ${g.need}`, { fontFamily: FONT_BODY, fontSize: '13px', color: done ? HEX.good : HEX.muted }).setOrigin(1, 0);
       const track = this.add.rectangle(12, 32, rowW - 26, 4, PALETTE.ink, 0.6).setOrigin(0, 0);
@@ -278,7 +278,7 @@ export class ChallengeScene extends Phaser.Scene {
 
     for (const cos of cosmetics(state)) {
       const c = this.add.container(0, 0);
-      const bg = this.add.nineslice(0, 0, 'frames', cos.earned ? 'slot_filled' : 'slot_empty', rowW, 40, 10, 10, 10, 10).setOrigin(0, 0);
+      const bg = this.add.rectangle(0, 0, rowW, 40, PALETTE.forest, cos.earned ? 0.42 : 0.16).setOrigin(0, 0);
       const label = this.add.text(12, 12, `${t(cos.nameKey)} — ${cos.id.split(':')[1]}`, {
         fontFamily: FONT_BODY, fontSize: '13px', color: cos.earned ? HEX.parchment : HEX.muted,
       });
