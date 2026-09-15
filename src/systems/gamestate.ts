@@ -96,27 +96,51 @@ export class FixedStep {
   readonly step: number;
   private acc = 0;
   private readonly maxFrame: number;
+  private readonly maxSteps: number;
+  private last: number | null = null;
 
   constructor(hz = 60, maxFrameMs = 250) {
     this.step = 1 / hz;
     this.maxFrame = maxFrameMs / 1000;
+    // The per-frame step cap has to agree with the frame clamp, or the clamp
+    // is never the thing that limits catch-up and the simulation silently
+    // falls behind real time on a slow frame.
+    this.maxSteps = Math.max(1, Math.ceil(this.maxFrame / this.step));
   }
 
-  /** Feed the frame delta in milliseconds; returns how many steps to run. */
+  /**
+   * Advance using a monotonic timestamp, and return how many steps to run.
+   *
+   * This must not use the frame delta the engine reports. Phaser smooths and
+   * clamps its delta towards the target frame time, so on a slow frame it
+   * reports ~16.7 ms however long the frame really took - which would make the
+   * simulation run at a fraction of real speed instead of catching up.
+   */
+  tick(nowMs: number): number {
+    if (this.last === null) { this.last = nowMs; return 0; }
+    const delta = nowMs - this.last;
+    this.last = nowMs;
+    return this.advance(delta);
+  }
+
+  /** Feed a frame delta in milliseconds; returns how many steps to run. */
   advance(deltaMs: number): number {
     const dt = Math.min(this.maxFrame, Math.max(0, deltaMs / 1000));
     this.acc += dt;
     let steps = 0;
-    while (this.acc >= this.step && steps < 8) {
+    while (this.acc >= this.step && steps < this.maxSteps) {
       this.acc -= this.step;
       steps++;
     }
-    if (steps >= 8) this.acc = 0;
+    // Anything still in the accumulator after the cap is time the simulation
+    // cannot catch up on; drop it rather than build a backlog.
+    if (steps >= this.maxSteps) this.acc = 0;
     return steps;
   }
 
   /** 0..1 position between the last two steps, for render interpolation. */
   get alpha(): number { return this.acc / this.step; }
 
-  reset(): void { this.acc = 0; }
+  /** Called when the game is resumed, so a long pause is not simulated. */
+  reset(): void { this.acc = 0; this.last = null; }
 }

@@ -546,15 +546,18 @@ export class StageScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ main loop
 
-  override update(time: number, delta: number): void {
+  override update(time: number, _delta: number): void {
     if (!this.ready) return;
     if (phase.isPaused) return;
     if (time < this.hitStopUntil) { this.renderAll(); return; }
 
     this.input2.update();
-    const steps = this.stepper.advance(delta);
+    // The real frame interval, not the engine's smoothed delta - see FixedStep.
+    const steps = this.stepper.tick(performance.now());
     for (let i = 0; i < steps; i++) this.fixedStep(this.stepper.step);
-    this.elapsedMs += delta;
+    // The run clock counts simulated time, so a personal best measures the same
+    // thing on every machine and cannot be gained or lost to frame rate.
+    this.elapsedMs += steps * this.stepper.step * 1000;
     this.renderAll();
     this.input2.endFrame();
 

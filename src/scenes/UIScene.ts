@@ -98,6 +98,11 @@ export class UIScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.layout, this);
       this.stage.events.off('hud', this.onHud, this);
     });
+    // Everything in the HUD - including the touch stick's hit area, which is
+    // built at a placeholder size - is positioned by layout(). Without this
+    // call nothing is placed until a resize happens to fire, which on a phone
+    // means the stick sits in a ten-pixel corner and no touch ever finds it.
+    this.layout();
     void data;
   }
 

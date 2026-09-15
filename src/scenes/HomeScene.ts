@@ -567,7 +567,8 @@ export class HomeScene extends Phaser.Scene {
     if (!this.ready) return;
     if (phase.isPaused) return;
     this.input2.update();
-    const steps = this.stepper.advance(delta);
+    // The real frame interval, not the engine's smoothed delta - see FixedStep.
+    const steps = this.stepper.tick(performance.now());
     for (let i = 0; i < steps; i++) {
       const dt = this.stepper.step;
       const mv = this.input2.move();
